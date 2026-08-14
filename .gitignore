@@ -1,0 +1,36 @@
+# Dependencies
+**/node_modules/
+
+# Expo and build output
+**/.expo/
+**/dist/
+**/web-build/
+**/expo-env.d.ts
+**/ios/
+**/android/
+
+# Local test artifacts
+.playwright-cli/
+output/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Logs and caches
+*.log
+*.tsbuildinfo
+.metro-health-check*
+.kotlin/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.orig.*
