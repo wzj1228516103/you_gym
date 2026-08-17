@@ -75,9 +75,14 @@ export type ProfileStackParamList = {
   AccountSecurity: undefined;
 };
 
+export type CommunityStackParamList = {
+  CommunityHome: undefined;
+};
+
 export type MainTabParamList = {
   AnatomyTab: undefined;
   PlansTab: undefined;
   NutritionTab: undefined;
+  CommunityTab: undefined;
   ProfileTab: undefined;
 };

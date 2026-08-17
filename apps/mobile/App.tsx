@@ -2,7 +2,7 @@ import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { Accessibility, ClipboardList, Soup, UserRound } from 'lucide-react-native';
+import { Accessibility, ClipboardList, MessagesSquare, Soup, UserRound } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
@@ -30,9 +30,11 @@ import { NotificationsScreen } from './src/screens/profile/NotificationsScreen';
 import { ProfileHomeScreen } from './src/screens/profile/ProfileHomeScreen';
 import { ReminderSettingsScreen } from './src/screens/profile/ReminderSettingsScreen';
 import { StorageScreen } from './src/screens/profile/StorageScreen';
+import { CommunityHomeScreen } from './src/screens/community/CommunityHomeScreen';
+import { trackEvent } from './src/services/analytics';
 import { AppStateProvider } from './src/state/AppState';
 import { colors, radius, spacing, typography } from './src/theme';
-import type { AnatomyStackParamList, MainTabParamList, NutritionStackParamList, PlanStackParamList, ProfileStackParamList, RootStackParamList } from './src/types';
+import type { AnatomyStackParamList, CommunityStackParamList, MainTabParamList, NutritionStackParamList, PlanStackParamList, ProfileStackParamList, RootStackParamList } from './src/types';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -40,6 +42,7 @@ const AnatomyStack = createNativeStackNavigator<AnatomyStackParamList>();
 const PlanStack = createNativeStackNavigator<PlanStackParamList>();
 const NutritionStack = createNativeStackNavigator<NutritionStackParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
 
 const navigationTheme: Theme = {
   ...DarkTheme,
@@ -62,12 +65,17 @@ function ProfileNavigator() {
   return <ProfileStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><ProfileStack.Screen name="ProfileHome" component={ProfileHomeScreen} /><ProfileStack.Screen name="BodyData" component={BodyDataScreen} /><ProfileStack.Screen name="Notifications" component={NotificationsScreen} /><ProfileStack.Screen name="ReminderSettings" component={ReminderSettingsScreen} /><ProfileStack.Screen name="Storage" component={StorageScreen} /><ProfileStack.Screen name="Help" component={HelpScreen} /><ProfileStack.Screen name="AccountSecurity" component={AccountSecurityScreen} /></ProfileStack.Navigator>;
 }
 
+function CommunityNavigator() {
+  return <CommunityStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><CommunityStack.Screen name="CommunityHome" component={CommunityHomeScreen} /></CommunityStack.Navigator>;
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator initialRouteName="AnatomyTab" screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tab.Screen name="AnatomyTab" component={AnatomyNavigator} options={{ title: '人体' }} />
       <Tab.Screen name="PlansTab" component={PlanNavigator} options={{ title: '训练计划' }} />
       <Tab.Screen name="NutritionTab" component={NutritionNavigator} options={{ title: '饮食管理' }} />
+      <Tab.Screen name="CommunityTab" component={CommunityNavigator} options={{ title: '社区' }} />
       <Tab.Screen name="ProfileTab" component={ProfileNavigator} options={{ title: '个人' }} />
     </Tab.Navigator>
   );
@@ -76,7 +84,7 @@ function MainTabs() {
 function TabBar({ state, descriptors, navigation }: any) {
   const activeRoute = state.routes[state.index];
   if ((activeRoute.state?.index ?? 0) > 0) return null;
-  const icons = [Accessibility, ClipboardList, Soup, UserRound];
+  const icons = [Accessibility, ClipboardList, Soup, MessagesSquare, UserRound];
   return (
     <View style={styles.tabBarOuter}>
       <View style={styles.tabBar}>
@@ -85,7 +93,10 @@ function TabBar({ state, descriptors, navigation }: any) {
           const Icon = icons[index];
           const label = descriptors[route.key].options.title ?? route.name;
           return (
-            <Pressable key={route.key} accessibilityRole="button" accessibilityLabel={label} onPress={() => navigation.navigate(route.name)} style={styles.tabItemWrap}>
+            <Pressable key={route.key} accessibilityRole="button" accessibilityLabel={label} onPress={() => {
+              if (route.name === 'CommunityTab') trackEvent('community_tab_clicked', { source: 'main_tab' });
+              navigation.navigate(route.name);
+            }} style={styles.tabItemWrap}>
               <View style={[styles.tabItem, focused && styles.tabItemFocused]}>
                 <Icon size={21} color={focused ? colors.primary : colors.textTertiary} strokeWidth={focused ? 2.4 : 1.8} />
                 <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>{label}</Text>
