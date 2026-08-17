@@ -173,7 +173,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange }:
       {options.map((option) => {
         const active = option.value === value;
         return (
-          <Pressable key={option.value} onPress={() => onChange(option.value)} style={[styles.segment, active && styles.segmentActive]}>
+          <Pressable key={option.value} accessibilityRole="button" accessibilityLabel={option.label} accessibilityState={{ selected: active }} onPress={() => onChange(option.value)} style={[styles.segment, active && styles.segmentActive]}>
             <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{option.label}</Text>
           </Pressable>
         );

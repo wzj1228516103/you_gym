@@ -11,6 +11,8 @@ type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseFilter'>;
 
 export function ExerciseFilterScreen({ navigation, route }: Props) {
   const node = anatomyNodes.find((item) => item.id === route.params.nodeId) ?? anatomyNodes[0];
+  const locations = ['全部', ...Array.from(new Set(exercises.map((exercise) => exercise.location)))];
+  const equipmentOptions = ['全部', ...Array.from(new Set(exercises.map((exercise) => exercise.equipment)))];
   const [location, setLocation] = useState('全部');
   const [equipment, setEquipment] = useState('全部');
   const [level, setLevel] = useState('全部');
@@ -29,8 +31,8 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
       <ScreenHeader title="动作筛选" onBack={navigation.goBack} actions={<IconButton icon={SlidersHorizontal} label="筛选" size={42} />} />
       <View style={styles.targetRow}><Text style={styles.targetLabel}>当前目标</Text><Tag tone="muscle">{node.muscle} · {node.part}</Tag></View>
 
-      <FilterRow title="场地" values={['全部', '健身房', '家庭']} value={location} onChange={setLocation} />
-      <FilterRow title="器械" values={['全部', '史密斯机', '腿举机', '哑铃', '自重']} value={equipment} onChange={setEquipment} />
+      <FilterRow title="场地" values={locations} value={location} onChange={setLocation} />
+      <FilterRow title="器械" values={equipmentOptions} value={equipment} onChange={setEquipment} />
       <FilterRow title="难度" values={['全部', '新手', '初级', '中级']} value={level} onChange={setLevel} />
 
       <View style={styles.resultHeader}>

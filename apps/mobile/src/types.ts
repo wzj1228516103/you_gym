@@ -1,15 +1,18 @@
 export type Gender = 'male' | 'female';
-export type BodySide = 'front' | 'back';
+export type BodySide = 'front' | 'back' | 'both';
 
 export type AnatomyNode = {
   id: string;
+  moduleId?: string;
+  color?: string;
   region: string;
   group: string;
   muscle: string;
   part: string;
   nameEn: string;
   side: BodySide;
-  hotspot: { left: `${number}%`; top: `${number}%`; width: `${number}%`; height: `${number}%` };
+  hotspot: { left: `${number}%`; top: `${number}%`; width: `${number}%`; height: `${number}%`; radius?: number };
+  hotspots?: { left: `${number}%`; top: `${number}%`; width: `${number}%`; height: `${number}%`; radius?: number }[];
   functions: string[];
   exerciseIds: string[];
 };
