@@ -18,6 +18,8 @@ docker compose up -d --build
 
 This starts MySQL, Redis, MinIO, and the API at `http://localhost:8080`. The local bootstrap administrator is `owner` / `local-admin-pass`; change these values before sharing the environment.
 
+The API image installs `curl` explicitly so both Docker and Compose health checks work consistently with the slim Java runtime image. Docker must be installed and running before using this command.
+
 ## Start the API
 
 ```powershell
