@@ -58,6 +58,18 @@ Mock mode keeps uploaded bytes in memory and exposes a local preview URL. Aliyun
 
 Deleting a resource requires `CONTENT_MANAGE` and is rejected while the object is referenced by any content item. Removing an asset in the editor queues cleanup until the content save succeeds, so cancelling an edit cannot delete a still-used object.
 
+Content management endpoints are protected by the same permission boundary:
+
+```text
+GET    /api/admin/v1/content
+POST   /api/admin/v1/content
+PATCH  /api/admin/v1/content/{id}
+POST   /api/admin/v1/content/{id}/status
+DELETE /api/admin/v1/content/{id}
+```
+
+Only draft and archived items can be deleted. Published content must be archived first. A successful delete returns the item's media asset metadata so the admin client can attempt reference-safe object cleanup; a cleanup failure is surfaced without restoring the deleted content.
+
 Never copy the `nn_family` EOS credentials into this project. That project uses China Mobile Cloud EOS through the S3-compatible SDK, while YOU GYM's production adapter targets Aliyun OSS.
 
 ## Analytics API

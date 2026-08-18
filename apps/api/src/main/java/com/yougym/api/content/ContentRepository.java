@@ -50,6 +50,10 @@ public class ContentRepository {
                 status, updatedBy, Timestamp.from(updatedAt), timestamp(publishedAt), id);
     }
 
+    public boolean deleteById(String id) {
+        return jdbcTemplate.update("DELETE FROM content_item WHERE id = ?", id) > 0;
+    }
+
     public boolean isMediaObjectReferenced(String objectName) {
         return jdbcTemplate.query("SELECT media_url, media_assets_json FROM content_item", (rs, rowNum) -> {
             if (objectName.equals(rs.getString("media_url"))) return true;

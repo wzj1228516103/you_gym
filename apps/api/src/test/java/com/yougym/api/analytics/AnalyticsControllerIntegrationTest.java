@@ -174,6 +174,40 @@ class AnalyticsControllerIntegrationTest {
     }
 
     @Test
+    void deletesDraftContentForManagersButNotEmployeesOrPublishedItems() throws Exception {
+        String body = "{\"title\":\"待删除草稿\",\"contentType\":\"ARTICLE\"}";
+        MvcResult created = mockMvc.perform(post("/api/admin/v1/content")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn();
+        String id = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(delete("/api/admin/v1/content/" + id)
+                        .header("X-Admin-Test-Token", "local-employee"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/admin/v1/content/" + id)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deleted", is(true)));
+        mockMvc.perform(get("/api/admin/v1/content/" + id)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isNotFound());
+
+        MvcResult published = mockMvc.perform(post("/api/admin/v1/content")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"已发布内容\",\"contentType\":\"ARTICLE\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        String publishedId = objectMapper.readTree(published.getResponse().getContentAsString()).get("id").asText();
+        mockMvc.perform(post("/api/admin/v1/content/" + publishedId + "/status")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/admin/v1/content/" + publishedId)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void uploadsContentMediaInCompatibleBatchFormatAndServesMockFiles() throws Exception {
         byte[] bytes = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};
         MockMultipartFile image = new MockMultipartFile("file", "cover.png", "text/html", bytes);

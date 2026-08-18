@@ -70,6 +70,15 @@ public class ContentAdminController {
         return item;
     }
 
+    @DeleteMapping("/{id}")
+    public Map<String, Object> delete(@PathVariable String id, HttpServletRequest request) {
+        var principal = accessService.authorize(request, AdminPermission.CONTENT_MANAGE);
+        var item = service.delete(id);
+        auditLogService.record(principal, "CONTENT_DELETED", "content", id, request,
+                Map.of("contentType", item.contentType(), "status", item.status()));
+        return Map.of("deleted", true, "mediaAssets", item.mediaAssets() == null ? List.of() : item.mediaAssets());
+    }
+
     public record ContentRequest(@NotBlank String title, @NotBlank String contentType, String summary,
                                  String body, String mediaUrl, List<ContentRepository.ContentMediaAsset> mediaAssets,
                                  String anatomyNodeId) {}

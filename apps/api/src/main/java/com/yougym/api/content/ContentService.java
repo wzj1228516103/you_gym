@@ -53,6 +53,14 @@ public class ContentService {
         return new ContentRepository.ContentItem(current.id(), current.title(), current.contentType(), status, current.summary(), current.body(), current.mediaUrl(), current.mediaAssets(), current.anatomyNodeId(), current.createdBy(), actor, current.createdAt(), now, publishedAt);
     }
 
+    public ContentRepository.ContentItem delete(String id) {
+        var current = repository.findById(id);
+        if (current == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "content not found");
+        if ("PUBLISHED".equals(current.status())) throw new ResponseStatusException(HttpStatus.CONFLICT, "archive published content before deleting");
+        repository.deleteById(id);
+        return current;
+    }
+
     public ContentRepository.ContentItem get(String id) {
         var item = repository.findById(id);
         if (item == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "content not found");

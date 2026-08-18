@@ -5,7 +5,7 @@ import DashboardChart from './components/DashboardChart.vue';
 import {
   createAdminAccount, createContent, downloadAnalyticsCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchContent,
-  deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
+  deleteContent, deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
   type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
@@ -103,6 +103,15 @@ async function discardContentForm() {
 }
 async function startNewContent() { await discardContentForm(); contentFormOpen.value = true; }
 async function changeContentStatus(item: ContentItem, status: ContentStatus) { try { await updateContentStatus(token.value, item.id, status); await refreshContent(); } catch (cause) { error.value = cause instanceof Error ? cause.message : '更新内容状态失败'; } }
+async function removeContent(item: ContentItem) {
+  if (!window.confirm(`确认删除“${item.title}”吗？此操作不可撤销。`)) return;
+  try {
+    const result = await deleteContent(token.value, item.id);
+    const cleanupSucceeded = await cleanupContentAssets(result.mediaAssets ?? []);
+    await refreshContent();
+    if (!cleanupSucceeded) error.value = '内容已删除，但部分媒体资源清理失败';
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : '删除内容失败'; }
+}
 const contentAllowedExtensions = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'mp4', 'mov', 'avi', 'webm', 'mkv', 'glb', 'gltf', 'fbx', 'obj', 'stl', 'usdz', 'pdf', 'zip', 'json']);
 function contentFileExtension(file: File) { return file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() ?? '' : ''; }
 function validateContentFiles(files: File[]) {
@@ -321,7 +330,7 @@ onMounted(() => { if (token.value) void refresh(); });
           <textarea v-model="contentForm.body" rows="5" placeholder="正文或播放说明" aria-label="内容正文" />
           <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" :disabled="contentLoading || contentUploading" @click="discardContentForm">取消</button></div>
         </form>
-        <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无内容，请先创建草稿</div></div>
+        <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无内容，请先创建草稿</div></div>
       </section>
     </main>
   </div>

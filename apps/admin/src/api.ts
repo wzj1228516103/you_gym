@@ -240,6 +240,12 @@ export async function updateContent(token: string, id: string, input: ContentInp
   return response.json() as Promise<ContentItem>;
 }
 
+export async function deleteContent(token: string, id: string) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) });
+  if (!response.ok) throw new Error(`删除内容失败（${response.status}）`);
+  return response.json() as Promise<{ deleted: boolean; mediaAssets: ContentMediaAsset[] }>;
+}
+
 export type ContentMediaUploadResult = {
   uploadedFiles: ContentMediaAsset[];
   failedFiles: { fileName: string; error: string }[];
