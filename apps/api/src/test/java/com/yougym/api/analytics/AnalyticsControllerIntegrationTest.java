@@ -8,13 +8,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.mock.web.MockMultipartFile;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -167,6 +170,69 @@ class AnalyticsControllerIntegrationTest {
                         .header("X-Admin-Test-Token", "local-employee")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void uploadsContentMediaInCompatibleBatchFormatAndServesMockFiles() throws Exception {
+        byte[] bytes = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};
+        MockMultipartFile image = new MockMultipartFile("file", "cover.png", "text/html", bytes);
+        MvcResult upload = mockMvc.perform(multipart("/api/file/media-upload/batch")
+                        .file(image)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(200)))
+                .andExpect(jsonPath("$.data.uploadedCount", is(1)))
+                .andExpect(jsonPath("$.data.failedCount", is(0)))
+                .andExpect(jsonPath("$.data.uploadedFiles[0].fileName", is("cover.png")))
+                .andExpect(jsonPath("$.data.uploadedFiles[0].fileType", is("image/png")))
+                .andExpect(jsonPath("$.data.uploadedFiles[0].url", startsWith("/api/file/mock-media")))
+                .andExpect(jsonPath("$.data.uploadedFiles[0].expiresIn", is(0)))
+                .andReturn();
+        var uploaded = objectMapper.readTree(upload.getResponse().getContentAsString()).get("data").get("uploadedFiles").get(0);
+        String objectName = uploaded.get("objectName").asText();
+
+        mockMvc.perform(get("/api/file/mock-media").param("objectKey", objectName))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/png"))
+                .andExpect(content().bytes(bytes));
+
+        mockMvc.perform(get("/api/file/media-url")
+                        .param("objectName", objectName)
+                        .header("X-Admin-Test-Token", "local-employee"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(200)))
+                .andExpect(jsonPath("$.data.objectName", is(objectName)))
+                .andExpect(jsonPath("$.data.url", startsWith("/api/file/mock-media")))
+                .andExpect(jsonPath("$.data.expiresIn", is(0)));
+
+        String contentWithStaleUrl = """
+                {"title":"媒体链接刷新测试","contentType":"ARTICLE","mediaUrl":"https://stale.test/cover.png","mediaAssets":[
+                  {"url":"https://stale.test/cover.png","objectName":"%s","fileName":"cover.png","fileSize":4,"fileType":"image/png","fileETag":"etag-test"}
+                ]}
+                """.formatted(objectName);
+        mockMvc.perform(post("/api/admin/v1/content")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .contentType(MediaType.APPLICATION_JSON).content(contentWithStaleUrl))
+                .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/admin/v1/content")
+                        .header("X-Admin-Test-Token", "local-employee")
+                        .param("search", "媒体链接刷新测试"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].mediaUrl", startsWith("/api/file/mock-media")))
+                .andExpect(jsonPath("$.items[0].mediaAssets[0].url", startsWith("/api/file/mock-media")));
+
+        mockMvc.perform(multipart("/api/file/media-upload/batch")
+                        .file(image)
+                        .header("X-Admin-Test-Token", "local-employee"))
+                .andExpect(status().isForbidden());
+
+        MockMultipartFile unsupported = new MockMultipartFile("file", "run.exe", "application/octet-stream", new byte[]{1});
+        mockMvc.perform(multipart("/api/file/media-upload/batch")
+                        .file(unsupported)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.uploadedCount", is(0)))
+                .andExpect(jsonPath("$.data.failedCount", is(1)));
     }
 
     @Test

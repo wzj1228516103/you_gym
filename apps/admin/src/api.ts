@@ -101,6 +101,15 @@ export type AnatomyNode = {
 
 export type ContentType = 'ARTICLE' | 'VIDEO' | 'GIF' | 'MODEL_3D' | 'EXERCISE';
 export type ContentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type ContentMediaAsset = {
+  url: string;
+  objectName: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  fileETag: string;
+  expiresIn?: number;
+};
 export type ContentItem = {
   id: string;
   title: string;
@@ -109,6 +118,7 @@ export type ContentItem = {
   summary: string | null;
   body: string | null;
   mediaUrl: string | null;
+  mediaAssets: ContentMediaAsset[];
   anatomyNodeId: string | null;
   createdBy: string;
   updatedBy: string;
@@ -116,6 +126,7 @@ export type ContentItem = {
   updatedAt: string;
   publishedAt: string | null;
 };
+export type ContentInput = { title: string; contentType: ContentType; summary: string; body: string; mediaUrl: string; mediaAssets: ContentMediaAsset[]; anatomyNodeId: string };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -217,16 +228,47 @@ export function fetchContent(token: string, filters: { status?: ContentStatus; c
   return request<{ items: ContentItem[] }>(`/api/admin/v1/content?${params.toString()}`, token);
 }
 
-export async function createContent(token: string, input: { title: string; contentType: ContentType; summary: string; body: string; mediaUrl: string; anatomyNodeId: string }) {
+export async function createContent(token: string, input: ContentInput) {
   const response = await fetch(`${API_BASE_URL}/api/admin/v1/content`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(`创建内容失败（${response.status}）`);
   return response.json() as Promise<ContentItem>;
 }
 
-export async function updateContent(token: string, id: string, input: { title: string; contentType: ContentType; summary: string; body: string; mediaUrl: string; anatomyNodeId: string }) {
+export async function updateContent(token: string, id: string, input: ContentInput) {
   const response = await fetch(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(`更新内容失败（${response.status}）`);
   return response.json() as Promise<ContentItem>;
+}
+
+export type ContentMediaUploadResult = {
+  uploadedFiles: ContentMediaAsset[];
+  failedFiles: { fileName: string; error: string }[];
+  uploadedCount: number;
+  failedCount: number;
+  allSuccess: boolean;
+};
+
+export function uploadContentMedia(token: string, files: File[], onProgress?: (progress: number) => void) {
+  const form = new FormData();
+  files.forEach((file) => form.append('file', file));
+  return new Promise<ContentMediaUploadResult>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE_URL}/api/file/media-upload/batch`);
+    Object.entries(authHeaders(token)).forEach(([name, value]) => xhr.setRequestHeader(name, String(value)));
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status < 200 || xhr.status >= 300) { reject(new Error(`资源上传失败（${xhr.status}）`)); return; }
+      try {
+        const result = JSON.parse(xhr.responseText) as { data: ContentMediaUploadResult };
+        resolve(result.data);
+      } catch { reject(new Error('资源上传响应格式错误')); }
+    });
+    xhr.addEventListener('error', () => reject(new Error('资源上传网络错误')));
+    xhr.addEventListener('abort', () => reject(new Error('资源上传已取消')));
+    xhr.send(form);
+  });
 }
 
 export async function updateContentStatus(token: string, id: string, status: ContentStatus) {

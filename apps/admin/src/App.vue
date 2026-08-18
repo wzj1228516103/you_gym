@@ -5,9 +5,9 @@ import DashboardChart from './components/DashboardChart.vue';
 import {
   createAdminAccount, createContent, downloadAnalyticsCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchContent,
-  logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus,
+  logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
   type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent,
-  type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentStatus, type ContentType,
+  type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
 
 const sessionStorageKey = 'you-gym:admin-session';
@@ -33,7 +33,13 @@ const contentSearch = ref('');
 const contentFormOpen = ref(false);
 const contentEditingId = ref<string | null>(null);
 const contentLoading = ref(false);
-const contentForm = ref({ title: '', contentType: 'ARTICLE' as ContentType, summary: '', body: '', mediaUrl: '', anatomyNodeId: '' });
+const contentUploading = ref(false);
+const contentUploadProgress = ref(0);
+const contentUploadMessage = ref('');
+const contentUploadFailures = ref<{ fileName: string; error: string }[]>([]);
+const contentDropActive = ref(false);
+const contentUploadInput = ref<HTMLInputElement | null>(null);
+const contentForm = ref({ title: '', contentType: 'ARTICLE' as ContentType, summary: '', body: '', mediaUrl: '', mediaAssets: [] as ContentMediaAsset[], anatomyNodeId: '' });
 const accountForm = ref({ username: '', displayName: '', password: '', role: 'EMPLOYEE' as AdminRole });
 const accountLoading = ref(false);
 
@@ -62,11 +68,57 @@ function rangeBounds() {
 
 const contentTypeLabel: Record<ContentType, string> = { ARTICLE: '文章', VIDEO: '视频', GIF: 'GIF', MODEL_3D: '3D 模型', EXERCISE: '动作课程' };
 const contentStatusLabel: Record<ContentStatus, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' };
-function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', anatomyNodeId: '' }; }
-function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', anatomyNodeId: item.anatomyNodeId ?? '' }; }
+function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', mediaAssets: [], anatomyNodeId: '' }; }
+function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])], anatomyNodeId: item.anatomyNodeId ?? '' }; }
 async function refreshContent() { if (!canReadContent.value) return; contentItems.value = (await fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined })).items; }
 async function saveContent() { contentLoading.value = true; error.value = ''; try { if (contentEditingId.value) await updateContent(token.value, contentEditingId.value, contentForm.value); else await createContent(token.value, contentForm.value); resetContentForm(); await refreshContent(); } catch (cause) { error.value = cause instanceof Error ? cause.message : '保存内容失败'; } finally { contentLoading.value = false; } }
 async function changeContentStatus(item: ContentItem, status: ContentStatus) { try { await updateContentStatus(token.value, item.id, status); await refreshContent(); } catch (cause) { error.value = cause instanceof Error ? cause.message : '更新内容状态失败'; } }
+const contentAllowedExtensions = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'mp4', 'mov', 'avi', 'webm', 'mkv', 'glb', 'gltf', 'fbx', 'obj', 'stl', 'usdz', 'pdf', 'zip', 'json']);
+function contentFileExtension(file: File) { return file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() ?? '' : ''; }
+function validateContentFiles(files: File[]) {
+  const valid: File[] = [];
+  const failures: { fileName: string; error: string }[] = [];
+  const seen = new Set<string>();
+  for (const file of files) {
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    const extension = contentFileExtension(file);
+    if (seen.has(key)) { failures.push({ fileName: file.name, error: '重复选择' }); continue; }
+    seen.add(key);
+    if (!contentAllowedExtensions.has(extension)) failures.push({ fileName: file.name, error: '不支持的文件格式' });
+    else if (file.size > 50 * 1024 * 1024) failures.push({ fileName: file.name, error: '单个文件超过 50MB' });
+    else valid.push(file);
+  }
+  return { valid, failures };
+}
+async function uploadContentFiles(files: File[]) {
+  if (!files.length) return;
+  const remaining = 10 - contentForm.value.mediaAssets.length;
+  if (files.length > remaining) { contentUploadMessage.value = `本次最多还能上传 ${remaining} 个资源`; return; }
+  const checked = validateContentFiles(files);
+  contentUploadFailures.value = checked.failures;
+  if (!checked.valid.length) { contentUploadMessage.value = checked.failures.length ? '没有可上传的资源' : '请选择资源'; return; }
+  contentUploading.value = true; contentUploadProgress.value = 0; contentUploadMessage.value = '';
+  try {
+    const result = await uploadContentMedia(token.value, checked.valid, (progress) => { contentUploadProgress.value = progress; });
+    contentForm.value.mediaAssets.push(...result.uploadedFiles);
+    contentUploadFailures.value.push(...result.failedFiles);
+    if (!contentForm.value.mediaUrl && result.uploadedFiles[0]) contentForm.value.mediaUrl = result.uploadedFiles[0].url;
+    const first = result.uploadedFiles[0];
+    if (first) {
+      const name = first.fileName.toLowerCase();
+      if (first.fileType.startsWith('video/')) contentForm.value.contentType = 'VIDEO';
+      else if (first.fileType === 'image/gif') contentForm.value.contentType = 'GIF';
+      else if (/\.(glb|gltf|fbx|obj|stl|usdz)$/.test(name)) contentForm.value.contentType = 'MODEL_3D';
+    }
+    contentUploadMessage.value = contentUploadFailures.value.length
+      ? `成功 ${result.uploadedCount} 个，失败 ${contentUploadFailures.value.length} 个`
+      : `已上传 ${result.uploadedCount} 个资源`;
+  } catch (cause) { contentUploadMessage.value = cause instanceof Error ? cause.message : '资源上传失败'; }
+  finally { contentUploading.value = false; contentUploadProgress.value = 100; }
+}
+async function handleContentFiles(event: Event) { const input = event.target as HTMLInputElement; const files = Array.from(input.files ?? []); input.value = ''; await uploadContentFiles(files); }
+async function handleContentDrop(event: DragEvent) { contentDropActive.value = false; await uploadContentFiles(Array.from(event.dataTransfer?.files ?? [])); }
+function removeContentMedia(index: number) { contentForm.value.mediaAssets.splice(index, 1); contentForm.value.mediaUrl = contentForm.value.mediaAssets[0]?.url ?? ''; }
 
 const trendOption = computed(() => {
   const points = dashboard.value?.trend ?? [];
@@ -212,7 +264,32 @@ onMounted(() => { if (token.value) void refresh(); });
       <section v-if="canReadContent" id="content" class="panel audit-panel content-center">
         <div class="panel-heading"><div><p class="eyebrow">CONTENT CENTER</p><h2>内容中心</h2></div><span class="panel-note">{{ contentItems.length }} 条内容</span></div>
         <div class="content-toolbar"><input v-model="contentSearch" placeholder="搜索标题或摘要" aria-label="搜索内容" @keyup.enter="refreshContent" /><select v-model="contentStatusFilter" aria-label="按状态筛选" @change="refreshContent"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="PUBLISHED">已发布</option><option value="ARCHIVED">已归档</option></select><select v-model="contentTypeFilter" aria-label="按类型筛选" @change="refreshContent"><option value="">全部类型</option><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><button v-if="canManageContent" class="button primary" type="button" @click="contentFormOpen = true">新建内容</button></div>
-        <form v-if="contentFormOpen && canManageContent" class="content-form" aria-label="内容编辑表单" @submit.prevent="saveContent"><input v-model="contentForm.title" required maxlength="180" placeholder="标题" aria-label="内容标题" /><select v-model="contentForm.contentType" aria-label="内容类型"><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><select v-model="contentForm.anatomyNodeId" aria-label="关联解剖节点"><option value="">不关联解剖节点</option><option v-for="node in anatomyNodes.filter((item) => item.level >= 2)" :key="node.id" :value="node.id">{{ node.nameZh }} · {{ node.nameEn }}</option></select><input v-model="contentForm.mediaUrl" type="url" placeholder="媒体地址（可选）" aria-label="媒体地址" /><textarea v-model="contentForm.summary" maxlength="500" placeholder="摘要（可选）" aria-label="内容摘要" /><textarea v-model="contentForm.body" rows="5" placeholder="正文或播放说明" aria-label="内容正文" /><div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" @click="resetContentForm">取消</button></div></form>
+        <form v-if="contentFormOpen && canManageContent" class="content-form" aria-label="内容编辑表单" @submit.prevent="saveContent">
+          <input v-model="contentForm.title" required maxlength="180" placeholder="标题" aria-label="内容标题" />
+          <select v-model="contentForm.contentType" aria-label="内容类型"><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select>
+          <select v-model="contentForm.anatomyNodeId" aria-label="关联解剖节点"><option value="">不关联解剖节点</option><option v-for="node in anatomyNodes.filter((item) => item.level >= 2)" :key="node.id" :value="node.id">{{ node.nameZh }} · {{ node.nameEn }}</option></select>
+          <input v-model="contentForm.mediaUrl" type="url" placeholder="外部资源地址（可选）" aria-label="媒体地址" />
+            <div class="media-uploader" :class="{ dragging: contentDropActive }" @dragover.prevent="contentDropActive = true" @dragleave.prevent="contentDropActive = false" @drop.prevent="handleContentDrop">
+            <input ref="contentUploadInput" class="visually-hidden" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.mp4,.mov,.avi,.webm,.mkv,.glb,.gltf,.fbx,.obj,.stl,.usdz,.pdf,.zip,.json" @change="handleContentFiles" />
+            <button class="button" type="button" :disabled="contentUploading || contentForm.mediaAssets.length >= 10" @click="contentUploadInput?.click()">{{ contentUploading ? `上传中 ${contentUploadProgress}%` : '上传资源' }}</button>
+            <span>单文件不超过 50MB，最多 10 个</span>
+            <progress v-if="contentUploading" class="media-progress" max="100" :value="contentUploadProgress" aria-label="资源上传进度" />
+            <small v-if="contentUploadMessage">{{ contentUploadMessage }}</small>
+            <ul v-if="contentUploadFailures.length" class="upload-failures"><li v-for="failure in contentUploadFailures" :key="`${failure.fileName}-${failure.error}`">{{ failure.fileName }}：{{ failure.error }}</li></ul>
+            </div>
+          <div v-if="contentForm.mediaAssets.length" class="content-media-list">
+            <div v-for="(asset, index) in contentForm.mediaAssets" :key="asset.objectName" class="content-media-item">
+              <img v-if="asset.fileType.startsWith('image/')" :src="asset.url" :alt="asset.fileName" />
+              <video v-else-if="asset.fileType.startsWith('video/')" :src="asset.url" muted preload="metadata" />
+              <div v-else class="resource-type">{{ asset.fileName.split('.').pop()?.toUpperCase() }}</div>
+              <div><strong>{{ asset.fileName }}</strong><small>{{ (asset.fileSize / 1024 / 1024).toFixed(2) }} MB</small></div>
+              <button class="media-remove" type="button" aria-label="移除资源" @click="removeContentMedia(index)">×</button>
+            </div>
+          </div>
+          <textarea v-model="contentForm.summary" maxlength="500" placeholder="摘要（可选）" aria-label="内容摘要" />
+          <textarea v-model="contentForm.body" rows="5" placeholder="正文或播放说明" aria-label="内容正文" />
+          <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" @click="resetContentForm">取消</button></div>
+        </form>
         <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无内容，请先创建草稿</div></div>
       </section>
     </main>

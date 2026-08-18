@@ -14,6 +14,10 @@ spring:
   data:
     redis:
       url: ${REDIS_URL:redis://localhost:6379}
+  servlet:
+    multipart:
+      max-file-size: 51MB
+      max-request-size: 510MB
 
 management:
   endpoints:
@@ -57,5 +61,6 @@ yougym:
       access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:}
       access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:}
       bucket: ${ALIYUN_OSS_BUCKET:}
+      public-base-url: ${ALIYUN_OSS_PUBLIC_BASE_URL:}
       key-prefix: ${ALIYUN_OSS_KEY_PREFIX:you-gym/integration-tests}
       signed-url-minutes: ${ALIYUN_OSS_SIGNED_URL_MINUTES:15}

@@ -10,20 +10,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/v1/content")
 public class ContentAdminController {
     private final AdminAccessService accessService;
     private final AuditLogService auditLogService;
-    private final ContentRepository repository;
     private final ContentService service;
 
     public ContentAdminController(AdminAccessService accessService, AuditLogService auditLogService,
-                                  ContentRepository repository, ContentService service) {
+                                  ContentService service) {
         this.accessService = accessService;
         this.auditLogService = auditLogService;
-        this.repository = repository;
         this.service = service;
     }
 
@@ -36,7 +35,7 @@ public class ContentAdminController {
         var principal = accessService.authorize(request, AdminPermission.CONTENT_READ);
         auditLogService.record(principal, "CONTENT_LIST_VIEWED", "content", null, request, Map.of());
         int safeLimit = Math.max(1, Math.min(limit, 500));
-        return Map.of("items", repository.find(status, contentType, search, safeLimit));
+        return Map.of("items", service.find(status, contentType, search, safeLimit));
     }
 
     @GetMapping("/{id}")
@@ -72,6 +71,7 @@ public class ContentAdminController {
     }
 
     public record ContentRequest(@NotBlank String title, @NotBlank String contentType, String summary,
-                                 String body, String mediaUrl, String anatomyNodeId) {}
+                                 String body, String mediaUrl, List<ContentRepository.ContentMediaAsset> mediaAssets,
+                                 String anatomyNodeId) {}
     public record StatusRequest(@NotBlank String status) {}
 }

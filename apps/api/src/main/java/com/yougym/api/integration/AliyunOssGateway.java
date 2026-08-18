@@ -9,8 +9,13 @@ import com.yougym.api.config.IntegrationProperties;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
+import java.util.Collection;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Component
 public class AliyunOssGateway implements ObjectStorageGateway {
@@ -22,6 +27,16 @@ public class AliyunOssGateway implements ObjectStorageGateway {
 
     @Override
     public UploadResult uploadText(String objectKey, String content) {
+        byte[] bytes = content.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            return upload(objectKey, new ByteArrayInputStream(bytes), bytes.length, "text/plain; charset=utf-8");
+        } catch (IOException impossible) {
+            throw new IntegrationProviderException("Aliyun OSS request failed", impossible);
+        }
+    }
+
+    @Override
+    public UploadResult upload(String objectKey, InputStream input, long contentLength, String contentType) throws IOException {
         IntegrationProperties.Oss config = properties.getOss();
         require(config.getEndpoint(), "OSS endpoint");
         require(config.getAccessKeyId(), "OSS access key id");
@@ -32,19 +47,60 @@ public class AliyunOssGateway implements ObjectStorageGateway {
         OSS client = new OSSClientBuilder().build(config.getEndpoint(), config.getAccessKeyId(), config.getAccessKeySecret());
         try {
             ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType("text/plain; charset=utf-8");
-            PutObjectResult result = client.putObject(config.getBucket(), key,
-                    new ByteArrayInputStream(content.getBytes(java.nio.charset.StandardCharsets.UTF_8)), metadata);
-            Date expires = new Date(System.currentTimeMillis() + config.getSignedUrlMinutes() * 60_000L);
-            GeneratePresignedUrlRequest signedRequest = new GeneratePresignedUrlRequest(config.getBucket(), key);
-            signedRequest.setExpiration(expires);
-            URL signedUrl = client.generatePresignedUrl(signedRequest);
-            return new UploadResult("aliyun-oss", key, result.getETag(), signedUrl.toString());
+            metadata.setContentLength(contentLength);
+            metadata.setContentType(contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType);
+            PutObjectResult result = client.putObject(config.getBucket(), key, input, metadata);
+            ResolvedUrl resolved = resolveUrl(client, config, key);
+            return new UploadResult("aliyun-oss", key, result.getETag(), resolved.url(), resolved.expiresInSeconds());
         } catch (Exception e) {
             throw new IntegrationProviderException("Aliyun OSS request failed", e);
         } finally {
             client.shutdown();
         }
+    }
+
+    @Override
+    public ResolvedUrl resolveUrl(String objectKey) {
+        ResolvedUrl resolved = resolveUrls(java.util.List.of(objectKey)).get(objectKey);
+        if (resolved == null) throw new IntegrationProviderException("OSS object key cannot be resolved");
+        return resolved;
+    }
+
+    @Override
+    public Map<String, ResolvedUrl> resolveUrls(Collection<String> objectKeys) {
+        IntegrationProperties.Oss config = properties.getOss();
+        require(config.getEndpoint(), "OSS endpoint");
+        require(config.getAccessKeyId(), "OSS access key id");
+        require(config.getAccessKeySecret(), "OSS access key secret");
+        require(config.getBucket(), "OSS bucket");
+        String prefix = config.getKeyPrefix() == null || config.getKeyPrefix().isBlank()
+                ? "" : config.getKeyPrefix().replaceAll("/+$", "") + "/";
+        OSS client = new OSSClientBuilder().build(config.getEndpoint(), config.getAccessKeyId(), config.getAccessKeySecret());
+        try {
+            Map<String, ResolvedUrl> resolved = new LinkedHashMap<>();
+            for (String objectKey : objectKeys) {
+                if (objectKey == null || objectKey.isBlank()) continue;
+                if (!prefix.isEmpty() && !objectKey.startsWith(prefix)) continue;
+                resolved.put(objectKey, resolveUrl(client, config, objectKey));
+            }
+            return resolved;
+        } catch (Exception e) {
+            throw new IntegrationProviderException("Aliyun OSS URL generation failed", e);
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    private static ResolvedUrl resolveUrl(OSS client, IntegrationProperties.Oss config, String key) {
+        boolean publicUrl = config.getPublicBaseUrl() != null && !config.getPublicBaseUrl().isBlank();
+        if (publicUrl) {
+            return new ResolvedUrl(config.getPublicBaseUrl().replaceAll("/+$", "") + "/" + key, 0);
+        }
+        Date expires = new Date(System.currentTimeMillis() + config.getSignedUrlMinutes() * 60_000L);
+        GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(config.getBucket(), key);
+        request.setExpiration(expires);
+        URL signedUrl = client.generatePresignedUrl(request);
+        return new ResolvedUrl(signedUrl.toString(), config.getSignedUrlMinutes() * 60L);
     }
 
     private static void require(String value, String name) {

@@ -3,6 +3,11 @@ package com.yougym.api.integration;
 import com.yougym.api.config.IntegrationProperties;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.Map;
+
 @Service
 public class IntegrationService {
     private final IntegrationProperties properties;
@@ -35,6 +40,18 @@ public class IntegrationService {
 
     public ObjectStorageGateway.UploadResult uploadText(String objectKey, String content) {
         return oss().uploadText(objectKey, content);
+    }
+
+    public ObjectStorageGateway.UploadResult upload(String objectKey, InputStream input, long contentLength, String contentType) throws IOException {
+        return oss().upload(objectKey, input, contentLength, contentType);
+    }
+
+    public ObjectStorageGateway.ResolvedUrl resolveObjectUrl(String objectKey) {
+        return oss().resolveUrl(objectKey);
+    }
+
+    public Map<String, ObjectStorageGateway.ResolvedUrl> resolveObjectUrls(Collection<String> objectKeys) {
+        return oss().resolveUrls(objectKeys);
     }
 
     public boolean isMock() { return !"aliyun".equalsIgnoreCase(properties.getMode()); }

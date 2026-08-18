@@ -42,6 +42,21 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/v1/integrations/os
 
 Real provider calls are intentionally not run by the repository test suite. Configure the Aliyun values locally, switch the mode to `aliyun`, and use the explicit confirmation header only for a controlled test recipient/bucket.
 
+## Content media uploads
+
+Administrators with `CONTENT_MANAGE` can upload up to 10 files per request. The request uses `multipart/form-data` with one or more `file` fields and keeps the response structure compatible with the existing `nn_family` batch upload endpoint.
+
+```text
+POST /api/file/media-upload/batch
+GET  /api/file/media-url?objectName=<stored-object-key>
+```
+
+Each file is limited to 50MB. Supported resources include common raster images and GIFs, MP4/MOV/AVI/WebM/MKV video, GLB/GLTF/FBX/OBJ/STL/USDZ models, and PDF/ZIP/JSON attachments. SVG is intentionally excluded because active SVG content should not be served from the application origin.
+
+Mock mode keeps uploaded bytes in memory and exposes a local preview URL. Aliyun mode streams files directly to OSS. Set `ALIYUN_OSS_PUBLIC_BASE_URL` when the bucket or a bound domain is publicly readable; otherwise the API returns short-lived signed URLs and refreshes them from the stored `objectName` whenever content is read.
+
+Never copy the `nn_family` EOS credentials into this project. That project uses China Mobile Cloud EOS through the S3-compatible SDK, while YOU GYM's production adapter targets Aliyun OSS.
+
 ## Analytics API
 
 Mobile clients can upload up to 100 events per request. `eventId` is the idempotency key.

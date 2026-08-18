@@ -80,6 +80,7 @@ public class IntegrationProperties {
         private String accessKeyId;
         private String accessKeySecret;
         private String bucket;
+        private String publicBaseUrl;
         private String keyPrefix = "you-gym/integration-tests";
         private int signedUrlMinutes = 15;
 
@@ -93,6 +94,8 @@ public class IntegrationProperties {
         public void setAccessKeySecret(String accessKeySecret) { this.accessKeySecret = accessKeySecret; }
         public String getBucket() { return bucket; }
         public void setBucket(String bucket) { this.bucket = bucket; }
+        public String getPublicBaseUrl() { return publicBaseUrl; }
+        public void setPublicBaseUrl(String publicBaseUrl) { this.publicBaseUrl = publicBaseUrl; }
         public String getKeyPrefix() { return keyPrefix; }
         public void setKeyPrefix(String keyPrefix) { this.keyPrefix = keyPrefix; }
         public int getSignedUrlMinutes() { return signedUrlMinutes; }
