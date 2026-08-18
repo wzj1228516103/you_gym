@@ -271,6 +271,12 @@ export function uploadContentMedia(token: string, files: File[], onProgress?: (p
   });
 }
 
+export async function deleteContentMedia(token: string, objectName: string) {
+  const response = await fetch(`${API_BASE_URL}/api/file/media?objectName=${encodeURIComponent(objectName)}`, { method: 'DELETE', headers: authHeaders(token) });
+  if (response.status === 404) return;
+  if (!response.ok) throw new Error(`资源清理失败（${response.status}）`);
+}
+
 export async function updateContentStatus(token: string, id: string, status: ContentStatus) {
   const response = await fetch(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
   if (!response.ok) throw new Error(`更新内容状态失败（${response.status}）`);

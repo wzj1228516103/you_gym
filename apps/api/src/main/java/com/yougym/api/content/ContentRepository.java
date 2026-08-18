@@ -50,6 +50,14 @@ public class ContentRepository {
                 status, updatedBy, Timestamp.from(updatedAt), timestamp(publishedAt), id);
     }
 
+    public boolean isMediaObjectReferenced(String objectName) {
+        return jdbcTemplate.query("SELECT media_url, media_assets_json FROM content_item", (rs, rowNum) -> {
+            if (objectName.equals(rs.getString("media_url"))) return true;
+            return mediaAssets(rs.getString("media_assets_json")).stream()
+                    .anyMatch(asset -> objectName.equals(asset.objectName()));
+        }).stream().anyMatch(Boolean::booleanValue);
+    }
+
     private ContentItem map(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new ContentItem(rs.getString("id"), rs.getString("title"), rs.getString("content_type"), rs.getString("status"),
                 rs.getString("summary"), rs.getString("body"), rs.getString("media_url"), mediaAssets(rs.getString("media_assets_json")), rs.getString("anatomy_node_id"),

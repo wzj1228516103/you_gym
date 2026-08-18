@@ -3,6 +3,7 @@ package com.yougym.api.integration;
 import com.yougym.api.audit.AuditLogService;
 import com.yougym.api.config.AdminAccessService;
 import com.yougym.api.config.AdminPermission;
+import com.yougym.api.content.ContentRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -33,13 +34,16 @@ public class MediaUploadController {
     private final AuditLogService auditLogService;
     private final IntegrationService integrationService;
     private final MockObjectStorageGateway mockStorage;
+    private final ContentRepository contentRepository;
 
     public MediaUploadController(AdminAccessService accessService, AuditLogService auditLogService,
-                                 IntegrationService integrationService, MockObjectStorageGateway mockStorage) {
+                                 IntegrationService integrationService, MockObjectStorageGateway mockStorage,
+                                 ContentRepository contentRepository) {
         this.accessService = accessService;
         this.auditLogService = auditLogService;
         this.integrationService = integrationService;
         this.mockStorage = mockStorage;
+        this.contentRepository = contentRepository;
     }
 
     @PostMapping(value = "/media-upload/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -118,6 +122,18 @@ public class MediaUploadController {
                 "url", resolved.url(), "objectName", objectName, "expiresIn", resolved.expiresInSeconds()));
     }
 
+    @DeleteMapping("/media")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMedia(@RequestParam String objectName, HttpServletRequest request) {
+        var principal = accessService.authorize(request, AdminPermission.CONTENT_MANAGE);
+        if (!isContentObjectName(objectName)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid content media object name");
+        if (contentRepository.isMediaObjectReferenced(objectName)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "media is still referenced by content");
+        }
+        if (!integrationService.deleteObject(objectName)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "media not found");
+        auditLogService.record(principal, "CONTENT_MEDIA_DELETED", "content_media", objectName, request, Map.of());
+    }
+
     private static void validate(MultipartFile file, String originalName) {
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("文件为空");
         if (file.getSize() > MAX_FILE_SIZE) throw new IllegalArgumentException("单个文件不能超过 50MB");
@@ -128,6 +144,10 @@ public class MediaUploadController {
     private static String extension(String fileName) {
         int dot = fileName == null ? -1 : fileName.lastIndexOf('.');
         return dot < 0 || dot == fileName.length() - 1 ? "" : fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isContentObjectName(String objectName) {
+        return objectName != null && objectName.matches("^(?:[A-Za-z0-9._-]+/)*content/\\d{4}/\\d{2}/[a-f0-9]{32}\\.[A-Za-z0-9]+$");
     }
 
     private static String effectiveContentType(MultipartFile file, String extension) {

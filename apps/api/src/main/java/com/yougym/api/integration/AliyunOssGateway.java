@@ -42,7 +42,9 @@ public class AliyunOssGateway implements ObjectStorageGateway {
         require(config.getAccessKeyId(), "OSS access key id");
         require(config.getAccessKeySecret(), "OSS access key secret");
         require(config.getBucket(), "OSS bucket");
-        String key = config.getKeyPrefix() + "/" + objectKey.replaceAll("[^a-zA-Z0-9._/-]", "_");
+        String prefix = config.getKeyPrefix() == null || config.getKeyPrefix().isBlank()
+                ? "" : config.getKeyPrefix().replaceAll("/+$", "") + "/";
+        String key = prefix + objectKey.replaceAll("[^a-zA-Z0-9._/-]", "_");
 
         OSS client = new OSSClientBuilder().build(config.getEndpoint(), config.getAccessKeyId(), config.getAccessKeySecret());
         try {
@@ -67,20 +69,29 @@ public class AliyunOssGateway implements ObjectStorageGateway {
     }
 
     @Override
+    public boolean delete(String objectKey) {
+        IntegrationProperties.Oss config = configuredOss();
+        validateObjectKey(config, objectKey);
+        OSS client = new OSSClientBuilder().build(config.getEndpoint(), config.getAccessKeyId(), config.getAccessKeySecret());
+        try {
+            client.deleteObject(config.getBucket(), objectKey);
+            return true;
+        } catch (Exception e) {
+            throw new IntegrationProviderException("Aliyun OSS delete failed", e);
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    @Override
     public Map<String, ResolvedUrl> resolveUrls(Collection<String> objectKeys) {
-        IntegrationProperties.Oss config = properties.getOss();
-        require(config.getEndpoint(), "OSS endpoint");
-        require(config.getAccessKeyId(), "OSS access key id");
-        require(config.getAccessKeySecret(), "OSS access key secret");
-        require(config.getBucket(), "OSS bucket");
-        String prefix = config.getKeyPrefix() == null || config.getKeyPrefix().isBlank()
-                ? "" : config.getKeyPrefix().replaceAll("/+$", "") + "/";
+        IntegrationProperties.Oss config = configuredOss();
         OSS client = new OSSClientBuilder().build(config.getEndpoint(), config.getAccessKeyId(), config.getAccessKeySecret());
         try {
             Map<String, ResolvedUrl> resolved = new LinkedHashMap<>();
             for (String objectKey : objectKeys) {
                 if (objectKey == null || objectKey.isBlank()) continue;
-                if (!prefix.isEmpty() && !objectKey.startsWith(prefix)) continue;
+                if (!isObjectKeyAllowed(config, objectKey)) continue;
                 resolved.put(objectKey, resolveUrl(client, config, objectKey));
             }
             return resolved;
@@ -101,6 +112,25 @@ public class AliyunOssGateway implements ObjectStorageGateway {
         request.setExpiration(expires);
         URL signedUrl = client.generatePresignedUrl(request);
         return new ResolvedUrl(signedUrl.toString(), config.getSignedUrlMinutes() * 60L);
+    }
+
+    private IntegrationProperties.Oss configuredOss() {
+        IntegrationProperties.Oss config = properties.getOss();
+        require(config.getEndpoint(), "OSS endpoint");
+        require(config.getAccessKeyId(), "OSS access key id");
+        require(config.getAccessKeySecret(), "OSS access key secret");
+        require(config.getBucket(), "OSS bucket");
+        return config;
+    }
+
+    private static void validateObjectKey(IntegrationProperties.Oss config, String objectKey) {
+        if (!isObjectKeyAllowed(config, objectKey)) throw new IntegrationProviderException("OSS object key is outside the configured prefix");
+    }
+
+    private static boolean isObjectKeyAllowed(IntegrationProperties.Oss config, String objectKey) {
+        String prefix = config.getKeyPrefix() == null || config.getKeyPrefix().isBlank()
+                ? "" : config.getKeyPrefix().replaceAll("/+$", "") + "/";
+        return !prefix.isEmpty() ? objectKey.startsWith(prefix) : !objectKey.startsWith("/");
     }
 
     private static void require(String value, String name) {

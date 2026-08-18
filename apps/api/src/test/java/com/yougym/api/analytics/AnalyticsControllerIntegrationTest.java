@@ -15,6 +15,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -220,6 +221,46 @@ class AnalyticsControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].mediaUrl", startsWith("/api/file/mock-media")))
                 .andExpect(jsonPath("$.items[0].mediaAssets[0].url", startsWith("/api/file/mock-media")));
+
+        mockMvc.perform(delete("/api/file/media")
+                        .param("objectName", objectName)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isConflict());
+        mockMvc.perform(delete("/api/file/media")
+                        .param("objectName", objectName)
+                        .header("X-Admin-Test-Token", "local-employee"))
+                .andExpect(status().isForbidden());
+
+        MockMultipartFile orphan = new MockMultipartFile("file", "orphan.png", "image/png", bytes);
+        MvcResult orphanUpload = mockMvc.perform(multipart("/api/file/media-upload/batch")
+                        .file(orphan)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isOk()).andReturn();
+        String orphanObjectName = objectMapper.readTree(orphanUpload.getResponse().getContentAsString())
+                .get("data").get("uploadedFiles").get(0).get("objectName").asText();
+        mockMvc.perform(post("/api/admin/v1/content")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"兼容旧媒体链接\",\"contentType\":\"ARTICLE\",\"mediaUrl\":\"" + orphanObjectName + "\"}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(delete("/api/file/media")
+                        .param("objectName", orphanObjectName)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isConflict());
+
+        MockMultipartFile deletable = new MockMultipartFile("file", "deletable.png", "image/png", bytes);
+        MvcResult deletableUpload = mockMvc.perform(multipart("/api/file/media-upload/batch")
+                        .file(deletable)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isOk()).andReturn();
+        String deletableObjectName = objectMapper.readTree(deletableUpload.getResponse().getContentAsString())
+                .get("data").get("uploadedFiles").get(0).get("objectName").asText();
+        mockMvc.perform(delete("/api/file/media")
+                        .param("objectName", deletableObjectName)
+                        .header("X-Admin-Test-Token", "local-admin"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/file/mock-media").param("objectKey", deletableObjectName))
+                .andExpect(status().isNotFound());
 
         mockMvc.perform(multipart("/api/file/media-upload/batch")
                         .file(image)

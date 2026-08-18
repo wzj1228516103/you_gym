@@ -5,7 +5,7 @@ import DashboardChart from './components/DashboardChart.vue';
 import {
   createAdminAccount, createContent, downloadAnalyticsCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchContent,
-  logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
+  deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
   type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
@@ -38,6 +38,8 @@ const contentUploadProgress = ref(0);
 const contentUploadMessage = ref('');
 const contentUploadFailures = ref<{ fileName: string; error: string }[]>([]);
 const contentDropActive = ref(false);
+const contentRemovedAssets = ref<ContentMediaAsset[]>([]);
+const contentUploadedInForm = ref<ContentMediaAsset[]>([]);
 const contentUploadInput = ref<HTMLInputElement | null>(null);
 const contentForm = ref({ title: '', contentType: 'ARTICLE' as ContentType, summary: '', body: '', mediaUrl: '', mediaAssets: [] as ContentMediaAsset[], anatomyNodeId: '' });
 const accountForm = ref({ username: '', displayName: '', password: '', role: 'EMPLOYEE' as AdminRole });
@@ -68,10 +70,38 @@ function rangeBounds() {
 
 const contentTypeLabel: Record<ContentType, string> = { ARTICLE: '文章', VIDEO: '视频', GIF: 'GIF', MODEL_3D: '3D 模型', EXERCISE: '动作课程' };
 const contentStatusLabel: Record<ContentStatus, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' };
-function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', mediaAssets: [], anatomyNodeId: '' }; }
-function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])], anatomyNodeId: item.anatomyNodeId ?? '' }; }
+function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', mediaAssets: [], anatomyNodeId: '' }; }
+function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])], anatomyNodeId: item.anatomyNodeId ?? '' }; }
 async function refreshContent() { if (!canReadContent.value) return; contentItems.value = (await fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined })).items; }
-async function saveContent() { contentLoading.value = true; error.value = ''; try { if (contentEditingId.value) await updateContent(token.value, contentEditingId.value, contentForm.value); else await createContent(token.value, contentForm.value); resetContentForm(); await refreshContent(); } catch (cause) { error.value = cause instanceof Error ? cause.message : '保存内容失败'; } finally { contentLoading.value = false; } }
+async function cleanupContentAssets(assets: ContentMediaAsset[]) {
+  if (!assets.length) return true;
+  const cleanup = await Promise.allSettled(assets.map((asset) => deleteContentMedia(token.value, asset.objectName)));
+  return cleanup.every((result) => result.status === 'fulfilled');
+}
+async function saveContent() {
+  contentLoading.value = true;
+  error.value = '';
+  const uploaded = [...contentUploadedInForm.value];
+  try {
+    if (contentEditingId.value) await updateContent(token.value, contentEditingId.value, contentForm.value);
+    else await createContent(token.value, contentForm.value);
+    const removed = [...contentRemovedAssets.value];
+    const cleanup = await cleanupContentAssets(removed);
+    resetContentForm();
+    await refreshContent();
+    if (!cleanup) error.value = '内容已保存，但部分未使用资源清理失败';
+  } catch (cause) {
+    const cleanupSucceeded = await cleanupContentAssets(uploaded);
+    error.value = cause instanceof Error ? cause.message : '保存内容失败';
+    if (!cleanupSucceeded) error.value += '；部分未保存资源清理失败';
+  } finally { contentLoading.value = false; }
+}
+async function discardContentForm() {
+  const cleanupSucceeded = await cleanupContentAssets([...contentUploadedInForm.value]);
+  if (!cleanupSucceeded) error.value = '部分未保存资源清理失败';
+  resetContentForm();
+}
+async function startNewContent() { await discardContentForm(); contentFormOpen.value = true; }
 async function changeContentStatus(item: ContentItem, status: ContentStatus) { try { await updateContentStatus(token.value, item.id, status); await refreshContent(); } catch (cause) { error.value = cause instanceof Error ? cause.message : '更新内容状态失败'; } }
 const contentAllowedExtensions = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'mp4', 'mov', 'avi', 'webm', 'mkv', 'glb', 'gltf', 'fbx', 'obj', 'stl', 'usdz', 'pdf', 'zip', 'json']);
 function contentFileExtension(file: File) { return file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() ?? '' : ''; }
@@ -101,6 +131,7 @@ async function uploadContentFiles(files: File[]) {
   try {
     const result = await uploadContentMedia(token.value, checked.valid, (progress) => { contentUploadProgress.value = progress; });
     contentForm.value.mediaAssets.push(...result.uploadedFiles);
+    contentUploadedInForm.value.push(...result.uploadedFiles);
     contentUploadFailures.value.push(...result.failedFiles);
     if (!contentForm.value.mediaUrl && result.uploadedFiles[0]) contentForm.value.mediaUrl = result.uploadedFiles[0].url;
     const first = result.uploadedFiles[0];
@@ -118,7 +149,7 @@ async function uploadContentFiles(files: File[]) {
 }
 async function handleContentFiles(event: Event) { const input = event.target as HTMLInputElement; const files = Array.from(input.files ?? []); input.value = ''; await uploadContentFiles(files); }
 async function handleContentDrop(event: DragEvent) { contentDropActive.value = false; await uploadContentFiles(Array.from(event.dataTransfer?.files ?? [])); }
-function removeContentMedia(index: number) { contentForm.value.mediaAssets.splice(index, 1); contentForm.value.mediaUrl = contentForm.value.mediaAssets[0]?.url ?? ''; }
+function removeContentMedia(index: number) { const [asset] = contentForm.value.mediaAssets.splice(index, 1); if (asset && !contentRemovedAssets.value.some((item) => item.objectName === asset.objectName)) contentRemovedAssets.value.push(asset); contentForm.value.mediaUrl = contentForm.value.mediaAssets[0]?.url ?? ''; }
 
 const trendOption = computed(() => {
   const points = dashboard.value?.trend ?? [];
@@ -263,7 +294,7 @@ onMounted(() => { if (token.value) void refresh(); });
       <section v-if="role === 'SUPER_ADMIN'" id="system" class="panel audit-panel"><div class="panel-heading"><div><p class="eyebrow">SYSTEM ACCESS</p><h2>管理员账号</h2></div><span class="panel-note">超级管理员专属</span></div><form class="account-form" aria-label="创建管理员账号" @submit.prevent="createAccount"><input v-model="accountForm.username" required pattern="[A-Za-z0-9._-]{3,80}" placeholder="用户名" autocomplete="username" /><input v-model="accountForm.displayName" required placeholder="显示名称" /><input v-model="accountForm.password" required minlength="12" type="password" placeholder="初始密码（至少 12 位）" autocomplete="new-password" /><select v-model="accountForm.role"><option value="ADMIN">管理员</option><option value="EMPLOYEE">普通员工</option></select><button class="button primary" type="submit" :disabled="accountLoading">{{ accountLoading ? '创建中…' : '创建账号' }}</button></form><div class="table-wrap"><table><thead><tr><th>用户名</th><th>名称</th><th>角色</th><th>状态</th><th>最后登录</th><th>操作</th></tr></thead><tbody><tr v-for="account in adminAccounts" :key="account.id"><td><strong>{{ account.username }}</strong></td><td>{{ account.displayName }}</td><td>{{ account.role }}</td><td><span :class="['status', account.status === 'ACTIVE' ? 'active' : 'locked']">{{ account.status === 'ACTIVE' ? '正常' : '已锁定' }}</span></td><td>{{ account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : '-' }}</td><td><button class="table-action" type="button" @click="toggleAccount(account)">{{ account.status === 'ACTIVE' ? '锁定' : '解锁' }}</button></td></tr></tbody></table><div v-if="!adminAccounts.length" class="empty">暂无管理员账号</div></div><div class="panel-heading session-heading"><div><p class="eyebrow">ACTIVE SESSIONS</p><h2>管理员会话</h2></div><button class="button" type="button" @click="revokeOtherSessions">撤销其他会话</button></div><div class="table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>最后使用</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="session in adminSessions" :key="session.id"><td><strong>{{ session.username }}</strong><small>{{ session.displayName }}</small></td><td>{{ session.role }}</td><td>{{ new Date(session.createdAt).toLocaleString() }}</td><td>{{ new Date(session.lastUsedAt).toLocaleString() }}</td><td><span :class="['status', session.active ? 'active' : 'locked']">{{ session.active ? '使用中' : '已撤销' }}</span></td><td><button v-if="session.active" class="table-action" type="button" @click="revokeSession(session)">撤销</button><span v-else>-</span></td></tr></tbody></table><div v-if="!adminSessions.length" class="empty">暂无会话</div></div></section>
       <section v-if="canReadContent" id="content" class="panel audit-panel content-center">
         <div class="panel-heading"><div><p class="eyebrow">CONTENT CENTER</p><h2>内容中心</h2></div><span class="panel-note">{{ contentItems.length }} 条内容</span></div>
-        <div class="content-toolbar"><input v-model="contentSearch" placeholder="搜索标题或摘要" aria-label="搜索内容" @keyup.enter="refreshContent" /><select v-model="contentStatusFilter" aria-label="按状态筛选" @change="refreshContent"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="PUBLISHED">已发布</option><option value="ARCHIVED">已归档</option></select><select v-model="contentTypeFilter" aria-label="按类型筛选" @change="refreshContent"><option value="">全部类型</option><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><button v-if="canManageContent" class="button primary" type="button" @click="contentFormOpen = true">新建内容</button></div>
+        <div class="content-toolbar"><input v-model="contentSearch" placeholder="搜索标题或摘要" aria-label="搜索内容" @keyup.enter="refreshContent" /><select v-model="contentStatusFilter" aria-label="按状态筛选" @change="refreshContent"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="PUBLISHED">已发布</option><option value="ARCHIVED">已归档</option></select><select v-model="contentTypeFilter" aria-label="按类型筛选" @change="refreshContent"><option value="">全部类型</option><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><button v-if="canManageContent" class="button primary" type="button" :disabled="contentLoading || contentUploading" @click="startNewContent">新建内容</button></div>
         <form v-if="contentFormOpen && canManageContent" class="content-form" aria-label="内容编辑表单" @submit.prevent="saveContent">
           <input v-model="contentForm.title" required maxlength="180" placeholder="标题" aria-label="内容标题" />
           <select v-model="contentForm.contentType" aria-label="内容类型"><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select>
@@ -288,7 +319,7 @@ onMounted(() => { if (token.value) void refresh(); });
           </div>
           <textarea v-model="contentForm.summary" maxlength="500" placeholder="摘要（可选）" aria-label="内容摘要" />
           <textarea v-model="contentForm.body" rows="5" placeholder="正文或播放说明" aria-label="内容正文" />
-          <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" @click="resetContentForm">取消</button></div>
+          <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" :disabled="contentLoading || contentUploading" @click="discardContentForm">取消</button></div>
         </form>
         <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无内容，请先创建草稿</div></div>
       </section>

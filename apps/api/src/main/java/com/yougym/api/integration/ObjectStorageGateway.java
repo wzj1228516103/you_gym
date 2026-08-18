@@ -9,6 +9,7 @@ import java.util.Map;
 public interface ObjectStorageGateway {
     UploadResult uploadText(String objectKey, String content);
     UploadResult upload(String objectKey, InputStream input, long contentLength, String contentType) throws IOException;
+    boolean delete(String objectKey);
     ResolvedUrl resolveUrl(String objectKey);
     default Map<String, ResolvedUrl> resolveUrls(Collection<String> objectKeys) {
         Map<String, ResolvedUrl> result = new LinkedHashMap<>();

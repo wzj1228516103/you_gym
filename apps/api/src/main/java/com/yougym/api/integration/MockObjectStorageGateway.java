@@ -28,6 +28,11 @@ public class MockObjectStorageGateway implements ObjectStorageGateway {
     }
 
     @Override
+    public boolean delete(String objectKey) {
+        return objects.remove(objectKey) != null;
+    }
+
+    @Override
     public ResolvedUrl resolveUrl(String objectKey) {
         if (!objects.containsKey(objectKey)) throw new IntegrationProviderException("Mock object does not exist");
         return new ResolvedUrl(previewUrl(objectKey), 0);

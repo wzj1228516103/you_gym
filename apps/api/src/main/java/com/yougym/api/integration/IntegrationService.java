@@ -46,6 +46,10 @@ public class IntegrationService {
         return oss().upload(objectKey, input, contentLength, contentType);
     }
 
+    public boolean deleteObject(String objectKey) {
+        return oss().delete(objectKey);
+    }
+
     public ObjectStorageGateway.ResolvedUrl resolveObjectUrl(String objectKey) {
         return oss().resolveUrl(objectKey);
     }

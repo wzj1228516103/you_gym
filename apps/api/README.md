@@ -49,11 +49,14 @@ Administrators with `CONTENT_MANAGE` can upload up to 10 files per request. The 
 ```text
 POST /api/file/media-upload/batch
 GET  /api/file/media-url?objectName=<stored-object-key>
+DELETE /api/file/media?objectName=<stored-object-key>
 ```
 
 Each file is limited to 50MB. Supported resources include common raster images and GIFs, MP4/MOV/AVI/WebM/MKV video, GLB/GLTF/FBX/OBJ/STL/USDZ models, and PDF/ZIP/JSON attachments. SVG is intentionally excluded because active SVG content should not be served from the application origin.
 
 Mock mode keeps uploaded bytes in memory and exposes a local preview URL. Aliyun mode streams files directly to OSS. Set `ALIYUN_OSS_PUBLIC_BASE_URL` when the bucket or a bound domain is publicly readable; otherwise the API returns short-lived signed URLs and refreshes them from the stored `objectName` whenever content is read.
+
+Deleting a resource requires `CONTENT_MANAGE` and is rejected while the object is referenced by any content item. Removing an asset in the editor queues cleanup until the content save succeeds, so cancelling an edit cannot delete a still-used object.
 
 Never copy the `nn_family` EOS credentials into this project. That project uses China Mobile Cloud EOS through the S3-compatible SDK, while YOU GYM's production adapter targets Aliyun OSS.
 
