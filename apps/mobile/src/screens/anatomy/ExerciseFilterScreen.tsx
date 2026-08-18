@@ -1,16 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bookmark, ChevronRight, Dumbbell, SearchX, SlidersHorizontal, Star } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, IconButton, ScreenHeader, Tag } from '../../components/ui';
 import { anatomyNodes, exercises } from '../../data/mockData';
 import { colors, radius, spacing, typography } from '../../theme';
+import { trackEvent } from '../../services/analytics';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseFilter'>;
 
 export function ExerciseFilterScreen({ navigation, route }: Props) {
   const node = anatomyNodes.find((item) => item.id === route.params.nodeId) ?? anatomyNodes[0];
+  useEffect(() => {
+    trackEvent('screen_viewed', { nodeId: node.id, muscle: node.muscle }, { screenId: 'exercise_filter' });
+  }, [node.id, node.muscle]);
   const locations = ['全部', ...Array.from(new Set(exercises.map((exercise) => exercise.location)))];
   const equipmentOptions = ['全部', ...Array.from(new Set(exercises.map((exercise) => exercise.equipment)))];
   const [location, setLocation] = useState('全部');

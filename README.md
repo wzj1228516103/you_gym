@@ -48,6 +48,22 @@ npm run typecheck
 npm run export:web
 ```
 
+API 和管理后台本地运行：
+
+```bash
+cd apps/api
+mvn spring-boot:run
+
+# 新开终端
+cd apps/admin
+npm install
+npm run dev
+```
+
+后台默认访问 `http://localhost:5173`，本地超级管理员 Token 为 `local-admin`，普通员工 Token 为 `local-employee`。当前页面提供埋点汇总、事件筛选和按权限控制的 CSV 导出；正式登录、MFA 和持久化 RBAC 按后续迭代接入。
+
+要启用本地持久化管理员登录，可在启动 API 前设置 `YOUGYM_ADMIN_BOOTSTRAP_ENABLED=true`、`YOUGYM_ADMIN_BOOTSTRAP_USERNAME` 和 `YOUGYM_ADMIN_BOOTSTRAP_PASSWORD`（至少 12 位）。
+
 ## 设计基准
 
 界面采用纯黑背景、深灰表面、`#B3FF00` 荧光黄绿色主操作色和 `#FF2D55` 肌肉高亮色。新页面应先阅读根目录的 `design.md`，并在 `390 x 844` 与 `360 x 800` 两种手机尺寸下验证。

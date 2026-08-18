@@ -11,7 +11,7 @@ type Props = NativeStackScreenProps<CommunityStackParamList, 'CommunityHome'>;
 
 export function CommunityHomeScreen(_: Props) {
   useEffect(() => {
-    trackEvent('community_screen_viewed', { source: 'main_tab' });
+    trackEvent('community_screen_viewed', { source: 'main_tab' }, { screenId: 'community_home' });
   }, []);
 
   return (

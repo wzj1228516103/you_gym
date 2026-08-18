@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AlertTriangle, Bookmark, Check, Dumbbell, Play, ShieldCheck, Star } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
@@ -6,6 +6,7 @@ import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader
 import { exercises } from '../../data/mockData';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
+import { trackEvent } from '../../services/analytics';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseDetail'>;
@@ -15,6 +16,10 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
   const { addExercise, todayExerciseIds } = useAppState();
   const [saved, setSaved] = useState(false);
   const added = todayExerciseIds.includes(exercise.id);
+
+  useEffect(() => {
+    trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: exercise.name }, { screenId: 'exercise_detail' });
+  }, [exercise.id, exercise.name]);
 
   return (
     <AppScreen>

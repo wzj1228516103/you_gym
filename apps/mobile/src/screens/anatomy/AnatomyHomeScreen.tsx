@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Layers3, LocateFixed, RotateCcw, Search, Set
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SegmentedControl, Tag } from '../../components/ui';
 import { anatomyNodes, regions } from '../../data/mockData';
 import { useAppState } from '../../state/AppState';
+import { trackEvent } from '../../services/analytics';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { AnatomyStackParamList, Gender } from '../../types';
 
@@ -27,20 +28,25 @@ const anatomyAssets: Record<Gender, number> = {
 const maleModuleAssets: Record<string, number> = {
   'muscle.neck': require('../../../assets/anatomy/modules/neck-muscles.png'),
   'muscle.trapezius': require('../../../assets/anatomy/modules/trapezius.png'),
+  'muscle.trapezius.middle': require('../../../assets/anatomy/modules/trapezius-middle.png'),
+  'muscle.trapezius.lower': require('../../../assets/anatomy/modules/trapezius-lower.png'),
   'muscle.deltoid.anterior': require('../../../assets/anatomy/modules/deltoid-anterior.png'),
   'muscle.deltoid.middle': require('../../../assets/anatomy/modules/deltoid-middle.png'),
   'muscle.deltoid.posterior': require('../../../assets/anatomy/modules/deltoid-posterior.png'),
   'muscle.pectoralis-major.clavicular': require('../../../assets/anatomy/modules/pectoralis-major.png'),
   'muscle.pectoralis-major.sternocostal': require('../../../assets/anatomy/modules/pectoralis-major-lower.png'),
+  'muscle.serratus-anterior': require('../../../assets/anatomy/modules/serratus-anterior.png'),
   'muscle.biceps-brachii': require('../../../assets/anatomy/modules/biceps-brachii.png'),
   'muscle.triceps-brachii': require('../../../assets/anatomy/modules/triceps-brachii.png'),
   'muscle.forearm': require('../../../assets/anatomy/modules/forearm-muscles.png'),
   'muscle.rectus-abdominis': require('../../../assets/anatomy/modules/rectus-abdominis.png'),
   'muscle.external-oblique': require('../../../assets/anatomy/modules/external-oblique.png'),
   'muscle.hip-flexors': require('../../../assets/anatomy/modules/hip-flexors.png'),
-  'muscle.quadriceps.rectus-femoris': require('../../../assets/anatomy/modules/quadriceps.png'),
+  'muscle.vastus-lateralis': require('../../../assets/anatomy/modules/quadriceps.png'),
+  'muscle.rectus-femoris': require('../../../assets/anatomy/modules/rectus-femoris.png'),
   'muscle.adductors': require('../../../assets/anatomy/modules/adductors.png'),
   'muscle.latissimus-dorsi': require('../../../assets/anatomy/modules/latissimus-dorsi.png'),
+  'muscle.erector-spinae': require('../../../assets/anatomy/modules/erector-spinae.png'),
   'muscle.gluteus-maximus': require('../../../assets/anatomy/modules/gluteus-maximus.png'),
   'muscle.gluteus-medius': require('../../../assets/anatomy/modules/gluteus-medius.png'),
   'muscle.hamstrings': require('../../../assets/anatomy/modules/hamstrings.png'),
@@ -51,20 +57,25 @@ const maleModuleAssets: Record<string, number> = {
 const femaleModuleAssets: Record<string, number> = {
   'muscle.neck': require('../../../assets/anatomy/female-modules/neck-muscles.png'),
   'muscle.trapezius': require('../../../assets/anatomy/female-modules/trapezius.png'),
+  'muscle.trapezius.middle': require('../../../assets/anatomy/female-modules/trapezius-middle.png'),
+  'muscle.trapezius.lower': require('../../../assets/anatomy/female-modules/trapezius-lower.png'),
   'muscle.deltoid.anterior': require('../../../assets/anatomy/female-modules/deltoid-anterior.png'),
   'muscle.deltoid.middle': require('../../../assets/anatomy/female-modules/deltoid-middle.png'),
   'muscle.deltoid.posterior': require('../../../assets/anatomy/female-modules/deltoid-posterior.png'),
   'muscle.pectoralis-major.clavicular': require('../../../assets/anatomy/female-modules/pectoralis-major.png'),
   'muscle.pectoralis-major.sternocostal': require('../../../assets/anatomy/female-modules/pectoralis-major-lower.png'),
+  'muscle.serratus-anterior': require('../../../assets/anatomy/female-modules/serratus-anterior.png'),
   'muscle.biceps-brachii': require('../../../assets/anatomy/female-modules/biceps-brachii.png'),
   'muscle.triceps-brachii': require('../../../assets/anatomy/female-modules/triceps-brachii.png'),
   'muscle.forearm': require('../../../assets/anatomy/female-modules/forearm-muscles.png'),
   'muscle.rectus-abdominis': require('../../../assets/anatomy/female-modules/rectus-abdominis.png'),
   'muscle.external-oblique': require('../../../assets/anatomy/female-modules/external-oblique.png'),
   'muscle.hip-flexors': require('../../../assets/anatomy/female-modules/hip-flexors.png'),
-  'muscle.quadriceps.rectus-femoris': require('../../../assets/anatomy/female-modules/quadriceps.png'),
+  'muscle.vastus-lateralis': require('../../../assets/anatomy/female-modules/quadriceps.png'),
+  'muscle.rectus-femoris': require('../../../assets/anatomy/female-modules/rectus-femoris.png'),
   'muscle.adductors': require('../../../assets/anatomy/female-modules/adductors.png'),
   'muscle.latissimus-dorsi': require('../../../assets/anatomy/female-modules/latissimus-dorsi.png'),
+  'muscle.erector-spinae': require('../../../assets/anatomy/female-modules/erector-spinae.png'),
   'muscle.gluteus-maximus': require('../../../assets/anatomy/female-modules/gluteus-maximus.png'),
   'muscle.gluteus-medius': require('../../../assets/anatomy/female-modules/gluteus-medius.png'),
   'muscle.hamstrings': require('../../../assets/anatomy/female-modules/hamstrings.png'),
@@ -96,9 +107,13 @@ export function AnatomyHomeScreen({ navigation }: Props) {
   }, [focus, selectedNodeId]);
 
   const chooseNode = (id: string) => {
+    const node = anatomyNodes.find((item) => item.id === id);
     setSelectedNodeId(id);
     setRegionDrilldown(null);
     setPanel(null);
+    if (node) {
+      trackEvent('muscle_selected', { nodeId: node.id, region: node.region, group: node.group, muscle: node.muscle, part: node.part }, { screenId: 'anatomy_home' });
+    }
   };
 
   const openRegionPanel = () => {
@@ -195,7 +210,10 @@ export function AnatomyHomeScreen({ navigation }: Props) {
         <PrimaryButton
           disabled={!hasExercises}
           label={hasExercises ? `查看匹配动作（${selectedNode.exerciseIds.length}）` : '动作库准备中'}
-          onPress={() => navigation.navigate('ExerciseFilter', { nodeId: selectedNode.id })}
+          onPress={() => {
+            trackEvent('exercise_filter_opened', { nodeId: selectedNode.id, muscle: selectedNode.muscle }, { screenId: 'anatomy_home' });
+            navigation.navigate('ExerciseFilter', { nodeId: selectedNode.id });
+          }}
         />
       </Card>
 
@@ -237,7 +255,10 @@ export function AnatomyHomeScreen({ navigation }: Props) {
                   key={region}
                   accessibilityRole="button"
                   accessibilityLabel={`查看${region}肌肉`}
-                  onPress={() => setRegionDrilldown(region)}
+                  onPress={() => {
+                    setRegionDrilldown(region);
+                    trackEvent('body_region_selected', { region, muscleCount }, { screenId: 'anatomy_home' });
+                  }}
                   style={[styles.panelOption, selectedNode.region === region && styles.panelOptionActive]}
                 >
                   <Text style={[styles.panelOptionText, selectedNode.region === region && styles.panelOptionTextActive]}>{region}</Text>

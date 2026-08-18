@@ -18,16 +18,28 @@ export const anatomyNodes: AnatomyNode[] = [
     hotspot: { left: '14%', top: '23%', width: '15%', height: '7%' }, hotspots: [{ left: '14%', top: '23%', width: '7%', height: '7%', radius: 20 }, { left: '21%', top: '23%', width: '8%', height: '7%', radius: 20 }], functions: ['肩关节水平内收', '肩关节内收'], exerciseIds: ['parallel-bar-dip', 'push-up'],
   },
   {
+    id: 'muscle.serratus-anterior', moduleId: 'muscle.serratus-anterior', color: '#F47732', region: '核心', group: '胸廓侧肌群', muscle: '前锯肌', part: '整体', nameEn: 'Serratus Anterior', side: 'front',
+    hotspot: { left: '12%', top: '27%', width: '18%', height: '15%' }, hotspots: [{ left: '12%', top: '27%', width: '6%', height: '15%', radius: 18 }, { left: '25%', top: '27%', width: '6%', height: '15%', radius: 18 }], functions: ['肩胛骨前伸', '肩胛骨上回旋'], exerciseIds: ['serratus-push-up', 'push-up'],
+  },
+  {
     id: 'muscle.rectus-abdominis', moduleId: 'muscle.rectus-abdominis', color: '#83B83D', region: '核心', group: '前侧核心肌群', muscle: '腹直肌', part: '整体', nameEn: 'Rectus Abdominis', side: 'front',
     hotspot: { left: '17%', top: '28%', width: '8%', height: '20%' }, hotspots: [{ left: '17%', top: '28%', width: '8%', height: '20%', radius: 18 }], functions: ['躯干屈曲', '骨盆稳定'], exerciseIds: ['plank'],
   },
   {
-    id: 'muscle.quadriceps.rectus-femoris', moduleId: 'muscle.quadriceps.rectus-femoris', color: '#42B7B5', region: '下肢', group: '膝伸肌群', muscle: '股四头肌', part: '股直肌', nameEn: 'Rectus Femoris', side: 'front',
+    id: 'muscle.vastus-lateralis', moduleId: 'muscle.vastus-lateralis', color: '#42B7B5', region: '下肢', group: '膝伸肌群', muscle: '股四头肌', part: '股外侧肌', nameEn: 'Vastus Lateralis', side: 'front',
     hotspot: { left: '12%', top: '46%', width: '18%', height: '25%' }, hotspots: [{ left: '12%', top: '46%', width: '7%', height: '25%', radius: 24 }, { left: '23%', top: '46%', width: '7%', height: '25%', radius: 24 }], functions: ['膝关节伸展', '髋关节屈曲'], exerciseIds: ['smith-squat', 'leg-press'],
+  },
+  {
+    id: 'muscle.rectus-femoris', moduleId: 'muscle.rectus-femoris', color: '#CB539B', region: '下肢', group: '膝伸肌群', muscle: '股四头肌', part: '股直肌', nameEn: 'Rectus Femoris', side: 'front',
+    hotspot: { left: '16%', top: '49%', width: '11%', height: '22%' }, hotspots: [{ left: '16%', top: '49%', width: '5%', height: '22%', radius: 20 }, { left: '22%', top: '49%', width: '5%', height: '22%', radius: 20 }], functions: ['膝关节伸展', '髋关节屈曲'], exerciseIds: ['smith-squat', 'leg-press'],
   },
   {
     id: 'muscle.latissimus-dorsi', moduleId: 'muscle.latissimus-dorsi', color: '#83B83D', region: '背部', group: '背部肌群', muscle: '背阔肌', part: '整体', nameEn: 'Latissimus Dorsi', side: 'back',
     hotspot: { left: '71%', top: '22%', width: '16%', height: '14%' }, hotspots: [{ left: '71%', top: '22%', width: '8%', height: '14%', radius: 20 }, { left: '80%', top: '22%', width: '7%', height: '14%', radius: 20 }], functions: ['肩关节伸展', '肩关节内收'], exerciseIds: ['lat-pulldown'],
+  },
+  {
+    id: 'muscle.erector-spinae', moduleId: 'muscle.erector-spinae', color: '#CB539B', region: '腰部', group: '后侧核心肌群', muscle: '竖脊肌', part: '腰段', nameEn: 'Lumbar Erector Spinae', side: 'back',
+    hotspot: { left: '74%', top: '30%', width: '10%', height: '17%' }, hotspots: [{ left: '74%', top: '30%', width: '5%', height: '17%', radius: 18 }, { left: '79%', top: '30%', width: '5%', height: '17%', radius: 18 }], functions: ['脊柱伸展', '躯干抗屈曲'], exerciseIds: ['romanian-deadlift', 'back-extension'],
   },
   {
     id: 'muscle.gluteus-maximus', moduleId: 'muscle.gluteus-maximus', color: '#F47732', region: '臀部', group: '臀肌群', muscle: '臀大肌', part: '整体', nameEn: 'Gluteus Maximus', side: 'back',
@@ -42,8 +54,16 @@ export const anatomyNodes: AnatomyNode[] = [
     hotspot: { left: '17%', top: '14%', width: '8%', height: '7%' }, hotspots: [{ left: '17%', top: '14%', width: '8%', height: '7%', radius: 16 }, { left: '74%', top: '10%', width: '8%', height: '11%', radius: 16 }], functions: ['颈椎稳定', '颈部屈伸控制'], exerciseIds: [],
   },
   {
-    id: 'muscle.trapezius', moduleId: 'muscle.trapezius', color: '#FFC51A', region: '背部', group: '背部肌群', muscle: '斜方肌', part: '上束与中束', nameEn: 'Trapezius', side: 'back',
+    id: 'muscle.trapezius', moduleId: 'muscle.trapezius', color: '#FFC51A', region: '背部', group: '背部肌群', muscle: '斜方肌', part: '上束', nameEn: 'Upper Trapezius', side: 'back',
     hotspot: { left: '71%', top: '17%', width: '15%', height: '13%' }, hotspots: [{ left: '71%', top: '17%', width: '7%', height: '13%', radius: 20 }, { left: '79%', top: '17%', width: '7%', height: '13%', radius: 20 }], functions: ['肩胛骨上提', '肩胛骨后缩'], exerciseIds: ['dumbbell-shoulder-press', 'lat-pulldown'],
+  },
+  {
+    id: 'muscle.trapezius.middle', moduleId: 'muscle.trapezius.middle', color: '#FFC51A', region: '背部', group: '背部肌群', muscle: '斜方肌', part: '中束', nameEn: 'Middle Trapezius', side: 'back',
+    hotspot: { left: '72%', top: '23%', width: '14%', height: '9%' }, hotspots: [{ left: '72%', top: '23%', width: '6%', height: '9%', radius: 18 }, { left: '80%', top: '23%', width: '6%', height: '9%', radius: 18 }], functions: ['肩胛骨后缩', '肩胛骨稳定'], exerciseIds: ['lat-pulldown'],
+  },
+  {
+    id: 'muscle.trapezius.lower', moduleId: 'muscle.trapezius.lower', color: '#FFC51A', region: '背部', group: '背部肌群', muscle: '斜方肌', part: '下束', nameEn: 'Lower Trapezius', side: 'back',
+    hotspot: { left: '74%', top: '29%', width: '10%', height: '10%' }, hotspots: [{ left: '74%', top: '29%', width: '4%', height: '10%', radius: 16 }, { left: '80%', top: '29%', width: '4%', height: '10%', radius: 16 }], functions: ['肩胛骨下压', '肩胛骨上回旋'], exerciseIds: ['lat-pulldown'],
   },
   {
     id: 'muscle.deltoid.posterior', moduleId: 'muscle.deltoid.posterior', color: '#3D82D9', region: '肩部', group: '肩部肌群', muscle: '三角肌', part: '后束', nameEn: 'Posterior Deltoid', side: 'back',
@@ -82,7 +102,7 @@ export const anatomyNodes: AnatomyNode[] = [
     hotspot: { left: '69%', top: '52%', width: '19%', height: '19%' }, hotspots: [{ left: '69%', top: '52%', width: '8%', height: '19%', radius: 20 }, { left: '80%', top: '52%', width: '8%', height: '19%', radius: 20 }], functions: ['膝关节屈曲', '髋关节伸展'], exerciseIds: ['hip-thrust'],
   },
   {
-    id: 'muscle.tibialis-anterior', moduleId: 'muscle.tibialis-anterior', color: '#CD927E', region: '小腿与足部', group: '小腿前侧肌群', muscle: '胫骨前肌', part: '整体', nameEn: 'Tibialis Anterior', side: 'front',
+    id: 'muscle.tibialis-anterior', moduleId: 'muscle.tibialis-anterior', color: '#4986D7', region: '小腿与足部', group: '小腿前侧肌群', muscle: '胫骨前肌', part: '整体', nameEn: 'Tibialis Anterior', side: 'front',
     hotspot: { left: '14%', top: '65%', width: '13%', height: '12%' }, hotspots: [{ left: '14%', top: '65%', width: '5%', height: '12%', radius: 14 }, { left: '21%', top: '65%', width: '5%', height: '12%', radius: 14 }], functions: ['踝关节背屈', '足弓控制'], exerciseIds: [],
   },
 ];
@@ -97,12 +117,15 @@ export const exercises: Exercise[] = [
   { id: 'parallel-bar-dip', name: '双杠臂屈伸', nameEn: 'Parallel Bar Dip', target: '胸大肌胸肋部', equipment: '双杠', location: '健身房', level: '中级', rating: 4.7, sets: 3, reps: '8–12', restSeconds: 90, steps: ['双手握住双杠并稳定肩胛骨。', '躯干适当前倾，手肘向后屈曲。', '下降到胸肩仍可稳定控制的位置。', '胸部和肱三头肌发力推回起始位置。'], mistakes: ['肩部过度前移', '下降幅度超出控制', '身体快速弹震'], safety: '肩前侧不适时缩短下降幅度，或先使用辅助双杠器械。' },
   { id: 'front-raise', name: '哑铃前平举', nameEn: 'Dumbbell Front Raise', target: '三角肌前束', equipment: '哑铃', location: '家庭', level: '初级', rating: 4.4, sets: 3, reps: '10–12', restSeconds: 60, steps: ['站立收紧核心。', '手臂微屈向前抬起。', '到肩高后控制下放。'], mistakes: ['借助身体摆动', '耸肩'], safety: '肩部撞击感明显时停止并调整活动范围。' },
   { id: 'lat-pulldown', name: '高位下拉', nameEn: 'Lat Pulldown', target: '背阔肌', equipment: '高位下拉机', location: '健身房', level: '初级', rating: 4.7, sets: 4, reps: '8–12', restSeconds: 75, steps: ['握距略宽于肩。', '先下沉肩胛再屈肘下拉。', '把手拉向上胸。', '控制回到伸展位。'], mistakes: ['身体后仰过多', '用手臂主导'], safety: '不要将把手拉到颈后。' },
+  { id: 'romanian-deadlift', name: '罗马尼亚硬拉', nameEn: 'Romanian Deadlift', target: '竖脊肌', equipment: '杠铃', location: '健身房', level: '中级', rating: 4.8, sets: 4, reps: '8–10', restSeconds: 90, steps: ['双脚与髋同宽，杠铃贴近大腿。', '保持脊柱中立并收紧核心。', '髋部向后移动，控制杠铃沿腿下放。', '感到大腿后侧拉伸后伸髋站起。'], mistakes: ['弓背下放', '杠铃远离身体', '用腰部过度后仰锁定'], safety: '全程保持腰背中立；出现下背部锐痛时立即停止并降低重量。' },
+  { id: 'back-extension', name: '罗马椅背伸', nameEn: 'Back Extension', target: '竖脊肌', equipment: '罗马椅', location: '健身房', level: '初级', rating: 4.6, sets: 3, reps: '12–15', restSeconds: 60, steps: ['将髋部稳定支撑在靠垫边缘。', '双臂交叉于胸前并保持脊柱中立。', '从髋部控制前倾至躯干可稳定的位置。', '收紧臀部和下背回到身体呈直线。'], mistakes: ['腰椎过度反弓', '快速甩动躯干', '支撑垫位置过高'], safety: '只抬到身体呈直线，不要在顶端过度后仰。' },
+  { id: 'serratus-push-up', name: '肩胛俯卧撑', nameEn: 'Serratus Push-up', target: '前锯肌', equipment: '自重', location: '家庭', level: '初级', rating: 4.5, sets: 3, reps: '12–15', restSeconds: 45, steps: ['双手位于肩部正下方，身体保持直线。', '保持手肘伸直，主动推远地面。', '感受肩胛骨向前滑动而非耸肩。', '控制肩胛骨回到中立位置。'], mistakes: ['弯曲手肘代偿', '腰部塌陷', '耸肩靠近耳朵'], safety: '肩部不适时缩小肩胛活动范围，保持颈部放松。' },
   { id: 'hip-thrust', name: '杠铃臀推', nameEn: 'Barbell Hip Thrust', target: '臀大肌', equipment: '杠铃', location: '健身房', level: '中级', rating: 4.8, sets: 4, reps: '8–12', restSeconds: 90, steps: ['肩胛下缘靠在训练凳上。', '双脚与髋同宽。', '收紧核心并伸髋。', '顶端保持骨盆中立。'], mistakes: ['腰椎过伸', '双脚位置过远'], safety: '杠铃接触处使用护垫，避免压迫髋前侧。' },
   { id: 'plank', name: '平板支撑', nameEn: 'Plank', target: '核心', equipment: '自重', location: '家庭', level: '新手', rating: 4.6, sets: 3, reps: '30–45 秒', restSeconds: 45, steps: ['肘部位于肩部下方。', '从头到脚保持直线。', '正常呼吸并收紧核心。'], mistakes: ['塌腰', '臀部过高'], safety: '腰部疼痛时缩短持续时间或改用跪姿。' },
   { id: 'calf-raise', name: '站姿提踵', nameEn: 'Standing Calf Raise', target: '腓肠肌', equipment: '自重', location: '家庭', level: '新手', rating: 4.5, sets: 4, reps: '12–15', restSeconds: 60, steps: ['前脚掌稳定站立。', '脚跟缓慢抬高。', '顶端停顿后控制下放。'], mistakes: ['借助弹性快速反弹'], safety: '保持脚踝稳定，必要时扶住固定物。' },
 ];
 
-export const regions = ['全身', '颈部', '肩部', '胸部', '背部', '手臂', '核心', '髋部', '臀部', '下肢', '小腿与足部'];
+export const regions = ['全身', '颈部', '肩部', '胸部', '背部', '腰部', '手臂', '核心', '髋部', '臀部', '下肢', '小腿与足部'];
 
 export const plans = [
   { id: 'full-body-beginner', title: '新手全身训练', duration: '3天/周 · 6周', level: '入门', target: '增肌 · 健康', exerciseCount: 6 },

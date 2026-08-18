@@ -47,7 +47,17 @@ MODULES: dict[str, tuple[list[Color], list[Box], float]] = {
     ),
     "trapezius": (
         [YELLOW],
-        [(915, 260, 1140, 440)],
+        [(915, 260, 1140, 335)],
+        50,
+    ),
+    "trapezius-middle": (
+        [YELLOW],
+        [(930, 330, 1125, 405)],
+        50,
+    ),
+    "trapezius-lower": (
+        [YELLOW],
+        [(960, 400, 1105, 465)],
         50,
     ),
     "deltoid-anterior": (
@@ -74,6 +84,11 @@ MODULES: dict[str, tuple[list[Color], list[Box], float]] = {
         [PECTORAL],
         [(175, 334, 375, 405)],
         45,
+    ),
+    "serratus-anterior": (
+        [YELLOW],
+        [(175, 365, 232, 462), (308, 365, 375, 462)],
+        50,
     ),
     "biceps-brachii": (
         [BICEPS, TRICEPS],
@@ -102,12 +117,17 @@ MODULES: dict[str, tuple[list[Color], list[Box], float]] = {
     ),
     "external-oblique": (
         [YELLOW],
-        [(180, 365, 245, 630), (307, 365, 370, 630)],
+        [(180, 463, 245, 630), (307, 463, 370, 630)],
         50,
     ),
     "hip-flexors": (
         [HIP_FLEXORS],
-        [(185, 515, 275, 745), (280, 515, 370, 745)],
+        [(185, 515, 275, 600), (280, 515, 370, 600)],
+        50,
+    ),
+    "rectus-femoris": (
+        [HIP_FLEXORS],
+        [(205, 600, 270, 900), (285, 600, 350, 900)],
         50,
     ),
     "quadriceps": (
@@ -123,6 +143,11 @@ MODULES: dict[str, tuple[list[Color], list[Box], float]] = {
     "latissimus-dorsi": (
         [RECTUS],
         [(925, 310, 1025, 545), (1030, 310, 1140, 545)],
+        50,
+    ),
+    "erector-spinae": (
+        [HIP_FLEXORS],
+        [(965, 380, 1105, 560)],
         50,
     ),
     "gluteus-maximus": (

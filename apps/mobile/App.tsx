@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Accessibility, ClipboardList, MessagesSquare, Soup, UserRound } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState as NativeAppState, Platform } from 'react-native';
+import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthScreen } from './src/screens/auth/AuthScreen';
 import { OtpScreen } from './src/screens/auth/OtpScreen';
@@ -31,7 +33,7 @@ import { ProfileHomeScreen } from './src/screens/profile/ProfileHomeScreen';
 import { ReminderSettingsScreen } from './src/screens/profile/ReminderSettingsScreen';
 import { StorageScreen } from './src/screens/profile/StorageScreen';
 import { CommunityHomeScreen } from './src/screens/community/CommunityHomeScreen';
-import { trackEvent } from './src/services/analytics';
+import { flushAnalyticsEventsToApi, startAnalyticsSession, trackEvent } from './src/services/analytics';
 import { AppStateProvider } from './src/state/AppState';
 import { colors, radius, spacing, typography } from './src/theme';
 import type { AnatomyStackParamList, CommunityStackParamList, MainTabParamList, NutritionStackParamList, PlanStackParamList, ProfileStackParamList, RootStackParamList } from './src/types';
@@ -94,7 +96,7 @@ function TabBar({ state, descriptors, navigation }: any) {
           const label = descriptors[route.key].options.title ?? route.name;
           return (
             <Pressable key={route.key} accessibilityRole="button" accessibilityLabel={label} onPress={() => {
-              if (route.name === 'CommunityTab') trackEvent('community_tab_clicked', { source: 'main_tab' });
+              if (route.name === 'CommunityTab') trackEvent('community_tab_clicked', { source: 'main_tab' }, { screenId: 'main_tab_bar' });
               navigation.navigate(route.name);
             }} style={styles.tabItemWrap}>
               <View style={[styles.tabItem, focused && styles.tabItemFocused]}>
@@ -110,6 +112,17 @@ function TabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function App() {
+  useEffect(() => {
+    startAnalyticsSession();
+    const flush = () => { void flushAnalyticsEventsToApi().catch(() => undefined); };
+    flush();
+    if (Platform.OS === 'web') return undefined;
+    const subscription = NativeAppState.addEventListener('change', (state) => {
+      if (state === 'active') flush();
+    });
+    return () => subscription.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AppStateProvider>
