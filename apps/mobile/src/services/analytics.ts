@@ -19,7 +19,9 @@ export type AnalyticsEventName =
   | 'workout_started'
   | 'workout_completed'
   | 'nutrition_screen_viewed'
+  | 'nutrition_food_search_opened'
   | 'nutrition_item_selected'
+  | 'nutrition_meal_recorded'
   | 'training_checkin_completed'
   | 'analytics_upload_failed';
 

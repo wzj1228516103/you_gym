@@ -140,6 +140,36 @@ class AnalyticsControllerIntegrationTest {
     }
 
     @Test
+    void exposesNutritionAnalyticsAndNutritionCsv() throws Exception {
+        String body = """
+                {"events":[
+                  {"eventId":"nutrition-screen-001","eventName":"nutrition_screen_viewed","occurredAt":"2026-08-18T04:00:00Z","sessionId":"nutrition-session","analyticsUserId":"nutrition-device","platform":"ios","screenId":"nutrition_home"},
+                  {"eventId":"nutrition-search-001","eventName":"nutrition_food_search_opened","occurredAt":"2026-08-18T04:01:00Z","sessionId":"nutrition-session","analyticsUserId":"nutrition-device","platform":"ios","screenId":"food_search"},
+                  {"eventId":"nutrition-meal-001","eventName":"nutrition_meal_recorded","occurredAt":"2026-08-18T04:02:00Z","sessionId":"nutrition-session","analyticsUserId":"nutrition-device","platform":"ios","properties":{"mealName":"午餐","foodCount":3}}
+                ]}
+                """;
+        mockMvc.perform(post("/api/v1/analytics/events:batch")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted", is(3)));
+        mockMvc.perform(get("/api/admin/v1/analytics/nutrition")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .param("from", "2026-08-18T00:00:00Z")
+                        .param("to", "2026-08-19T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis.screenViews", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.kpis.foodSearches", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.kpis.mealRecords", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.mealDistribution[0].name", is("午餐")));
+        mockMvc.perform(get("/api/admin/v1/analytics/nutrition.csv")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .param("from", "2026-08-18T00:00:00Z")
+                        .param("to", "2026-08-19T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", containsString("nutrition-events.csv")))
+                .andExpect(content().string(containsString("nutrition_meal_recorded")));
+    }
+
+    @Test
     void managesContentDraftsPublishesThemAndRestrictsEmployeeWrites() throws Exception {
         String body = """
                 {"title":"手臂训练基础","contentType":"ARTICLE","summary":"肱二头肌与肱三头肌的基础训练说明","body":"先完成热身，再进行动作练习。","mediaUrl":"https://example.test/arm.md","anatomyNodeId":"muscle.biceps-brachii"}

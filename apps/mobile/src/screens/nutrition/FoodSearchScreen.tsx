@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronRight, Search, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -6,6 +6,7 @@ import { AppScreen, Card, Chip, IconButton, ScreenHeader } from '../../component
 import { foods } from '../../data/mockData';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
+import { trackEvent } from '../../services/analytics';
 
 type Props = NativeStackScreenProps<NutritionStackParamList, 'FoodSearch'>;
 
@@ -13,6 +14,7 @@ export function FoodSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('鸡胸肉');
   const [tab, setTab] = useState('全部');
   const results = useMemo(() => foods.filter((food) => food.name.includes(query.trim()) || !query.trim()), [query]);
+  useEffect(() => { trackEvent('nutrition_food_search_opened', { source: 'nutrition_home' }, { screenId: 'food_search' }); }, []);
   return (
     <AppScreen keyboard>
       <ScreenHeader title="食物搜索" onBack={navigation.goBack} />
@@ -20,7 +22,7 @@ export function FoodSearchScreen({ navigation }: Props) {
       <View style={styles.tabs}>{['全部', '食物', '食谱', '我的'].map((item) => <Chip key={item} label={item} active={tab === item} onPress={() => setTab(item)} />)}</View>
       <Text style={styles.count}>找到 {results.length} 个结果</Text>
       {results.map((food) => (
-        <Card key={food.id} onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })} accessibilityLabel={`查看${food.name}`} style={styles.foodCard}>
+        <Card key={food.id} onPress={() => { trackEvent('nutrition_item_selected', { foodId: food.id, source: 'food_search' }, { screenId: 'food_search' }); navigation.navigate('FoodDetail', { foodId: food.id }); }} accessibilityLabel={`查看${food.name}`} style={styles.foodCard}>
           <View style={styles.foodArt}><Text style={styles.foodEmoji}>◉</Text></View>
           <View style={styles.foodCopy}><Text style={styles.foodName}>{food.name}</Text><Text style={styles.foodMeta}>{food.serving} · {food.calories} kcal</Text></View>
           <Text style={styles.source}>{food.source}</Text>

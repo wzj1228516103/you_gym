@@ -24,13 +24,16 @@ public class AnalyticsAdminController {
     private final AdminAccessService accessService;
     private final AuditLogService auditLogService;
     private final AnalyticsDashboardService dashboardService;
+    private final NutritionDashboardService nutritionDashboardService;
 
     public AnalyticsAdminController(AnalyticsEventRepository repository, AdminAccessService accessService,
-                                    AuditLogService auditLogService, AnalyticsDashboardService dashboardService) {
+                                    AuditLogService auditLogService, AnalyticsDashboardService dashboardService,
+                                    NutritionDashboardService nutritionDashboardService) {
         this.repository = repository;
         this.accessService = accessService;
         this.auditLogService = auditLogService;
         this.dashboardService = dashboardService;
+        this.nutritionDashboardService = nutritionDashboardService;
     }
 
     @GetMapping("/dashboard")
@@ -59,6 +62,34 @@ public class AnalyticsAdminController {
         auditLogService.record(principal, "ANALYTICS_SUMMARY_VIEWED", "analytics", null, request, Map.of());
         Range range = Range.of(from, to);
         return Map.of("from", range.from(), "to", range.to(), "items", repository.summarize(range.from(), range.to()));
+    }
+
+    @GetMapping("/nutrition")
+    public NutritionDashboardService.Dashboard nutrition(@RequestParam(required = false) Instant from,
+                                                          @RequestParam(required = false) Instant to,
+                                                          @RequestParam(defaultValue = "Asia/Shanghai") String timezone,
+                                                          HttpServletRequest request) {
+        var principal = accessService.authorize(request, AdminPermission.ANALYTICS_READ);
+        Range range = Range.of(from, to);
+        java.time.ZoneId zoneId;
+        try { zoneId = java.time.ZoneId.of(timezone); }
+        catch (java.time.DateTimeException invalid) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid timezone"); }
+        auditLogService.record(principal, "NUTRITION_ANALYTICS_VIEWED", "nutrition_analytics", null, request, Map.of("timezone", zoneId.getId()));
+        return nutritionDashboardService.dashboard(range.from(), range.to(), zoneId);
+    }
+
+    @GetMapping(value = "/nutrition.csv", produces = "text/csv")
+    public ResponseEntity<byte[]> nutritionCsv(@RequestParam(required = false) Instant from,
+                                               @RequestParam(required = false) Instant to,
+                                               @RequestParam(defaultValue = "10000") int limit,
+                                               HttpServletRequest request) {
+        var principal = accessService.authorize(request, AdminPermission.ANALYTICS_EXPORT);
+        Range range = Range.of(from, to);
+        List<AnalyticsEventRepository.AnalyticsEventRow> rows = repository.findNutrition(range.from(), range.to(), Math.max(1, Math.min(limit, 10000)));
+        StringBuilder csv = new StringBuilder("eventId,eventName,eventVersion,occurredAt,receivedAt,sessionId,analyticsUserId,platform,appVersion,screenId,propertiesJson\n");
+        for (var row : rows) csv.append(String.join(",", quote(row.eventId()), quote(row.eventName()), quote(row.eventVersion()), quote(row.occurredAt()), quote(row.receivedAt()), quote(row.sessionId()), quote(row.analyticsUserId()), quote(row.platform()), quote(row.appVersion()), quote(row.screenId()), quote(row.propertiesJson()))).append('\n');
+        auditLogService.record(principal, "NUTRITION_ANALYTICS_EXPORTED", "nutrition_analytics", null, request, Map.of("count", rows.size()));
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=nutrition-events.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     @GetMapping("/events")

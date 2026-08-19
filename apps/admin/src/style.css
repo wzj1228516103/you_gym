@@ -129,6 +129,10 @@ td small { color: #6e7580; font-size: 10px; }
 .form-actions { display: flex; gap: 8px; grid-column: 1 / -1; }
 .status.draft { color: #ffb020; }
 .content-actions { display: flex; gap: 10px; }
+.nutrition-center { overflow: hidden; }
+.nutrition-stats { margin-top: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.nutrition-grid { margin-top: 14px; }
+.properties-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .chart-panel { min-height: 0; padding-bottom: 12px; }
 .chart-wide { grid-column: span 2; }

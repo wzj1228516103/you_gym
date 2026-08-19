@@ -51,6 +51,10 @@ public class AnalyticsEventRepository {
         return jdbcTemplate.query(sql.toString(), this::mapRow, Timestamp.from(from), Timestamp.from(to), eventName, limit);
     }
 
+    public List<AnalyticsEventRow> findNutrition(Instant from, Instant to, int limit) {
+        return jdbcTemplate.query("SELECT event_id,event_name,event_version,occurred_at,received_at,session_id,analytics_user_id,platform,app_version,build_number,locale,timezone,network_type,screen_id,properties_json FROM analytics_event WHERE occurred_at >= ? AND occurred_at < ? AND event_name LIKE 'nutrition_%' ORDER BY occurred_at DESC LIMIT ?", this::mapRow, Timestamp.from(from), Timestamp.from(to), limit);
+    }
+
     public List<AnalyticsSummaryRow> summarize(Instant from, Instant to) {
         return jdbcTemplate.query("SELECT event_name, COUNT(*) AS event_count, COUNT(DISTINCT analytics_user_id) AS unique_users FROM analytics_event WHERE occurred_at >= ? AND occurred_at < ? GROUP BY event_name ORDER BY event_count DESC", (rs, rowNum) -> new AnalyticsSummaryRow(rs.getString("event_name"), rs.getLong("event_count"), rs.getLong("unique_users")), Timestamp.from(from), Timestamp.from(to));
     }

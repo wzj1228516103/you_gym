@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Camera, ChevronRight, Plus, Search, Utensils } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -5,6 +6,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
+import { trackEvent } from '../../services/analytics';
 
 type Props = NativeStackScreenProps<NutritionStackParamList, 'NutritionHome'>;
 
@@ -16,6 +18,7 @@ const meals = [
 ];
 
 export function NutritionHomeScreen({ navigation }: Props) {
+  useEffect(() => { trackEvent('nutrition_screen_viewed', { source: 'main_tab' }, { screenId: 'nutrition_home' }); }, []);
   return (
     <AppScreen>
       <ScreenHeader title="今日营养" actions={<IconButton icon={Camera} label="扫描食物" size={42} />} />

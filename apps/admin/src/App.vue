@@ -3,10 +3,10 @@ import { computed, onMounted, ref } from 'vue';
 import AdminAuthView from './AdminAuthView.vue';
 import DashboardChart from './components/DashboardChart.vue';
 import {
-  createAdminAccount, createContent, downloadAnalyticsCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
-  fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchContent,
+  createAdminAccount, createContent, downloadAnalyticsCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
+  fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchContent, fetchNutritionDashboard,
   deleteContent, deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
-  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent,
+  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type NutritionDashboard,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
 
@@ -27,6 +27,7 @@ const adminAccounts = ref<AdminAccount[]>([]);
 const adminSessions = ref<AdminSessionView[]>([]);
 const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
+const nutrition = ref<NutritionDashboard | null>(null);
 const contentStatusFilter = ref<ContentStatus | ''>('');
 const contentTypeFilter = ref<ContentType | ''>('');
 const contentSearch = ref('');
@@ -53,6 +54,7 @@ const canExport = computed(() => permissions.value.includes('ANALYTICS_EXPORT'))
 const canReadAudit = computed(() => permissions.value.includes('AUDIT_READ'));
 const canReadContent = computed(() => permissions.value.includes('CONTENT_READ'));
 const canManageContent = computed(() => permissions.value.includes('CONTENT_MANAGE'));
+const canReadAnalytics = computed(() => permissions.value.includes('ANALYTICS_READ'));
 const anatomyRegions = computed(() => anatomyNodes.value.filter((node) => node.level === 1));
 const roleLabel = computed(() => ({ SUPER_ADMIN: '超级管理员', ADMIN: '管理员', EMPLOYEE: '普通员工' }[role.value ?? 'EMPLOYEE']));
 const isSession = computed(() => token.value.startsWith('yg_admin_'));
@@ -207,6 +209,17 @@ const platformOption = computed(() => ({
   series: [{ type: 'pie', radius: ['52%', '76%'], center: ['50%', '44%'], label: { color: '#dce3ea', formatter: '{b}\n{c}' },
     data: (dashboard.value?.platformDistribution ?? []).map((item, index) => ({ name: item.name, value: item.eventCount, itemStyle: { color: ['#b3ff00', '#35e6e8', '#5da7ff', '#ffb020', '#ff2d55'][index % 5] } })) }],
 } as const));
+const nutritionTrendOption = computed(() => ({
+  tooltip: { trigger: 'axis' },
+  legend: { data: ['饮食事件', '匿名用户'], textStyle: { color: '#a5acb8' } },
+  grid: { left: 42, right: 18, top: 38, bottom: 28 },
+  xAxis: { type: 'category', data: nutrition.value?.trend.map((point) => point.date.slice(5)) ?? [], axisLabel: { color: '#8c95a3' } },
+  yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#8c95a3' } },
+  series: [
+    { name: '饮食事件', type: 'line', smooth: true, showSymbol: false, data: nutrition.value?.trend.map((point) => point.eventCount) ?? [], lineStyle: { color: '#ffb020', width: 2 }, itemStyle: { color: '#ffb020' } },
+    { name: '匿名用户', type: 'line', smooth: true, showSymbol: false, data: nutrition.value?.trend.map((point) => point.uniqueUsers) ?? [], lineStyle: { color: '#35e6e8', width: 2 }, itemStyle: { color: '#35e6e8' } },
+  ],
+} as const));
 
 async function refresh() {
   loading.value = true;
@@ -216,7 +229,7 @@ async function refresh() {
     role.value = session.role;
     permissions.value = session.permissions;
     const { from, to } = rangeBounds();
-    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent] = await Promise.all([
+    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextNutrition] = await Promise.all([
       fetchAnalyticsDashboard(token.value, from, to),
       fetchAnalyticsSummary(token.value, from, to),
       fetchAnalyticsEvents(token.value, selectedEvent.value || undefined),
@@ -225,6 +238,7 @@ async function refresh() {
       session.permissions.includes('ADMIN_ACCOUNT_MANAGE') ? fetchAdminSessions(token.value) : Promise.resolve({ items: [] as AdminSessionView[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
       session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
+      session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
     ]);
     dashboard.value = nextDashboard;
     summary.value = nextSummary;
@@ -234,10 +248,11 @@ async function refresh() {
     adminSessions.value = nextSessions.items;
     anatomyNodes.value = nextAnatomy.items;
     contentItems.value = nextContent.items;
+    nutrition.value = nextNutrition;
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = [];
+    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null;
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { loading.value = false; }
 }
@@ -252,8 +267,9 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; } }
+async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
+async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 onMounted(() => { if (token.value) void refresh(); });
 </script>
 
@@ -264,6 +280,7 @@ onMounted(() => { if (token.value) void refresh(); });
       <div class="brand"><span class="brand-mark">YG</span><span>YOU GYM</span></div>
       <nav class="nav" aria-label="后台导航">
         <a class="nav-item active" href="#analytics">埋点仪表盘</a>
+        <a v-if="canReadAnalytics" class="nav-item" href="#nutrition">饮食管理</a>
         <a v-if="canReadContent" class="nav-item" href="#content">内容中心</a>
         <a v-if="role !== 'EMPLOYEE'" class="nav-item" href="#anatomy">解剖中心</a>
         <a v-if="role !== 'EMPLOYEE'" class="nav-item" href="#review">审核中心 <span>预留</span></a>
@@ -297,6 +314,20 @@ onMounted(() => { if (token.value) void refresh(); });
       <section class="content-grid">
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">EVENT SUMMARY</p><h2>事件明细</h2></div></div><div v-if="summary?.items.length" class="summary-list"><div v-for="item in summary.items" :key="item.eventName" class="summary-row"><div class="summary-name"><strong>{{ item.eventName }}</strong><span>{{ item.uniqueUsers }} 个匿名设备</span></div><strong>{{ item.eventCount }}</strong></div></div><div v-else class="empty">暂无事件数据</div></article>
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RECENT EVENTS</p><h2>最近事件</h2></div><select v-model="selectedEvent" aria-label="按事件名称筛选" @change="refresh"><option value="">全部事件</option><option v-for="item in summary?.items ?? []" :key="item.eventName" :value="item.eventName">{{ item.eventName }}</option></select></div><div class="table-wrap"><table><thead><tr><th>事件</th><th>屏幕</th><th>平台</th><th>发生时间</th></tr></thead><tbody><tr v-for="event in events" :key="event.eventId"><td><strong>{{ event.eventName }}</strong><small>{{ event.analyticsUserId ?? '未标识' }}</small></td><td>{{ event.screenId ?? '-' }}</td><td>{{ event.platform ?? '-' }}</td><td>{{ new Date(event.occurredAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!events.length" class="empty">暂无匹配事件</div></div></article>
+      </section>
+      <section v-if="canReadAnalytics" id="nutrition" class="panel audit-panel nutrition-center">
+        <div class="panel-heading"><div><p class="eyebrow">NUTRITION OPERATIONS</p><h2>饮食管理</h2></div><div class="content-actions"><span class="panel-note">行为数据 · {{ nutrition?.kpis.eventCount ?? 0 }} 条</span><button v-if="canExport" class="button" type="button" @click="downloadNutritionEventsCsv">导出饮食 CSV</button></div></div>
+        <div class="stats nutrition-stats">
+          <article class="stat"><span>饮食页访问</span><strong>{{ nutrition?.kpis.screenViews ?? 0 }}</strong><small>nutrition_screen_viewed</small></article>
+          <article class="stat"><span>食物搜索</span><strong>{{ nutrition?.kpis.foodSearches ?? 0 }}</strong><small>nutrition_food_search_opened</small></article>
+          <article class="stat"><span>食物选择</span><strong>{{ nutrition?.kpis.itemSelections ?? 0 }}</strong><small>nutrition_item_selected</small></article>
+          <article class="stat"><span>餐次记录</span><strong>{{ nutrition?.kpis.mealRecords ?? 0 }}</strong><small>nutrition_meal_recorded</small></article>
+        </div>
+        <div class="dashboard-grid nutrition-grid">
+          <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION TREND</p><h2>饮食行为趋势</h2></div></div><DashboardChart :option="nutritionTrendOption" :empty="!nutrition?.trend.length" /></article>
+          <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">MEAL DISTRIBUTION</p><h2>餐次记录分布</h2></div></div><div v-if="nutrition?.mealDistribution.length" class="summary-list"><div v-for="item in nutrition.mealDistribution" :key="item.name" class="summary-row"><div class="summary-name"><strong>{{ item.name }}</strong><span>{{ item.uniqueUsers }} 个匿名用户</span></div><strong>{{ item.eventCount }}</strong></div></div><div v-else class="empty">暂无餐次记录</div></article>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>时间</th><th>行为</th><th>页面</th><th>平台</th><th>匿名用户</th><th>属性</th></tr></thead><tbody><tr v-for="event in nutrition?.recentEvents ?? []" :key="event.eventId"><td>{{ new Date(event.occurredAt).toLocaleString() }}</td><td><strong>{{ event.eventName }}</strong></td><td>{{ event.screenId ?? '-' }}</td><td>{{ event.platform ?? '-' }}</td><td>{{ event.analyticsUserId ?? '-' }}</td><td class="properties-cell">{{ event.propertiesJson }}</td></tr></tbody></table><div v-if="!nutrition?.recentEvents.length" class="empty">暂无饮食行为数据</div></div>
       </section>
       <section v-if="role !== 'EMPLOYEE'" id="anatomy" class="panel audit-panel"><div class="panel-heading"><div><p class="eyebrow">ANATOMY CATALOG</p><h2>解剖节点目录</h2></div><span class="panel-note">{{ anatomyNodes.length }} 个节点 · V1</span></div><div class="anatomy-grid"><article v-for="region in anatomyRegions" :key="region.id" class="anatomy-region"><div class="anatomy-region-heading"><strong>{{ region.nameZh }}</strong><small>{{ region.nameEn }}</small></div><div class="anatomy-tags"><span v-for="node in anatomyDescendants(region.id)" :key="node.id" :class="['anatomy-tag', `level-${node.level}`]">{{ node.nameZh }}</span></div></article></div><div v-if="!anatomyNodes.length" class="empty">暂无解剖节点</div></section>
       <section v-if="canReadAudit" id="audit" class="panel audit-panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>最近审计操作</h2></div><span class="panel-note">管理员可见</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>资源</th><th>来源 IP</th></tr></thead><tbody><tr v-for="log in auditLogs" :key="log.id"><td>{{ new Date(log.occurredAt).toLocaleString() }}</td><td>{{ log.actorSubject }}<small>{{ log.actorRole }}</small></td><td><strong>{{ log.action }}</strong></td><td>{{ log.resourceType }}</td><td>{{ log.ipAddress ?? '-' }}</td></tr></tbody></table><div v-if="!auditLogs.length" class="empty">暂无审计记录</div></div></section>

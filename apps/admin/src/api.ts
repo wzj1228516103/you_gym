@@ -28,6 +28,17 @@ export type AnalyticsDashboard = {
   platformDistribution: { name: string; eventCount: number; uniqueDevices: number }[];
 };
 
+export type NutritionDashboard = {
+  from: string;
+  to: string;
+  timezone: string;
+  kpis: { eventCount: number; uniqueUsers: number; screenViews: number; foodSearches: number; itemSelections: number; mealRecords: number };
+  eventDistribution: { name: string; eventCount: number; uniqueUsers: number }[];
+  mealDistribution: { name: string; eventCount: number; uniqueUsers: number }[];
+  trend: { date: string; eventCount: number; uniqueUsers: number }[];
+  recentEvents: AnalyticsEvent[];
+};
+
 export type AnalyticsEvent = {
   eventId: string;
   eventName: string;
@@ -194,6 +205,13 @@ export function fetchAnalyticsDashboard(token: string, from?: string, to?: strin
   return request<AnalyticsDashboard>(`/api/admin/v1/analytics/dashboard?${params.toString()}`, token);
 }
 
+export function fetchNutritionDashboard(token: string, from?: string, to?: string, timezone = 'Asia/Shanghai') {
+  const params = new URLSearchParams({ timezone });
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return request<NutritionDashboard>(`/api/admin/v1/analytics/nutrition?${params.toString()}`, token);
+}
+
 export function fetchAdminSession(token: string) {
   return request<AdminSession>('/api/admin/v1/session', token);
 }
@@ -330,5 +348,11 @@ export async function downloadAnalyticsCsv(token: string) {
     headers: authHeaders(token),
   });
   if (!response.ok) throw new Error(response.status === 401 ? '管理员 Token 无效或已过期' : `导出失败（${response.status}）`);
+  return response.blob();
+}
+
+export async function downloadNutritionCsv(token: string) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/analytics/nutrition.csv?limit=10000`, { headers: authHeaders(token) });
+  if (!response.ok) throw new Error(response.status === 401 ? '管理 Token 无效或已过期' : `导出失败（${response.status}）`);
   return response.blob();
 }

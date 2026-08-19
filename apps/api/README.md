@@ -82,6 +82,8 @@ The Expo client reads `EXPO_PUBLIC_API_BASE_URL` and uploads queued events when 
 
 The current event vocabulary includes community navigation, screen views, body-region and muscle selection, exercise filtering/detail views, workout lifecycle, nutrition views, and training check-ins. New event names should be added to the mobile union before they are emitted so the client and API contract stay reviewable.
 
+The admin analytics area also exposes a nutrition behavior view. It aggregates anonymous nutrition screen views, food searches, food selections, and meal-record actions, with meal-name distribution and CSV export. This is intentionally behavior analytics only: the current mobile nutrition screens use mock food data and do not yet persist user nutrition records or expose identifiable dietary details in the admin panel.
+
 ```powershell
 $events = @{ events = @(@{
   eventId = 'evt-local-001'
