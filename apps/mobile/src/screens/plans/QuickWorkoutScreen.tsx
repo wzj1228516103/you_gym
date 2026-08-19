@@ -4,15 +4,13 @@ import {
   Check,
   Dumbbell,
   Home,
-  Minus,
-  Plus,
   SlidersHorizontal,
   Sparkles,
   Trees,
 } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, PrimaryButton, ScreenHeader, Tag } from '../../components/ui';
-import { exercises } from '../../data/mockData';
+import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { PlanStackParamList } from '../../types';
 
@@ -21,12 +19,12 @@ type Props = NativeStackScreenProps<PlanStackParamList, 'QuickWorkout'>;
 const targets = ['胸部', '背部', '肩部', '手臂', '核心', '臀腿'];
 
 export function QuickWorkoutScreen({ navigation }: Props) {
+  const { exercises, replaceTodayExercises } = useAppState();
   const [step, setStep] = useState(1);
   const [venue, setVenue] = useState('健身房');
   const [equipment, setEquipment] = useState(['哑铃', '杠铃', '器械']);
   const [target, setTarget] = useState('胸部');
   const [selectedIds, setSelectedIds] = useState(['incline-dumbbell-press', 'push-up', 'dumbbell-shoulder-press']);
-  const [sets, setSets] = useState(4);
 
   const selectedExercises = useMemo(
     () => exercises.filter((exercise) => selectedIds.includes(exercise.id)),
@@ -42,9 +40,13 @@ export function QuickWorkoutScreen({ navigation }: Props) {
       臀腿: ['股', '臀', '腓'],
     };
     const matches = matchers[target] ?? [];
-    const filtered = exercises.filter((exercise) => matches.some((keyword) => exercise.target.includes(keyword)));
+    const filtered = exercises.filter((exercise) => (
+      matches.some((keyword) => exercise.target.includes(keyword))
+      && exercise.location === venue
+      && (equipment.length === 0 || equipment.some((item) => exercise.equipment.includes(item)))
+    ));
     return filtered.length > 0 ? filtered : exercises.slice(0, 6);
-  }, [target]);
+  }, [equipment, exercises, target, venue]);
 
   const toggleEquipment = (value: string) => {
     setEquipment((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
@@ -56,7 +58,10 @@ export function QuickWorkoutScreen({ navigation }: Props) {
 
   const next = () => {
     if (step < 5) setStep((current) => current + 1);
-    else navigation.replace('Workout');
+    else {
+      replaceTodayExercises(selectedExercises.map((exercise) => exercise.id));
+      navigation.replace('Workout');
+    }
   };
 
   return (
@@ -118,7 +123,7 @@ export function QuickWorkoutScreen({ navigation }: Props) {
             return (
               <Pressable key={exercise.id} onPress={() => toggleExercise(exercise.id)} style={[styles.exerciseRow, active && styles.exerciseRowActive]}>
                 <View style={styles.exerciseArt}><Dumbbell size={23} color={active ? colors.primary : colors.textSecondary} /></View>
-                <View style={styles.exerciseCopy}><Text style={styles.exerciseName}>{exercise.name}</Text><Text style={styles.exerciseMeta}>{exercise.target} · {exercise.equipment} · {exercise.rating.toFixed(1)} 分</Text></View>
+                <View style={styles.exerciseCopy}><Text style={styles.exerciseName}>{exercise.name}</Text><Text style={styles.exerciseMeta}>{exercise.target} · {exercise.equipment}{exercise.rating > 0 ? ` · ${exercise.rating.toFixed(1)} 分` : ''}</Text></View>
                 <View style={[styles.checkBox, active && styles.checkBoxActive]}>{active ? <Check size={15} color={colors.textInverse} strokeWidth={3} /> : null}</View>
               </Pressable>
             );
@@ -128,13 +133,10 @@ export function QuickWorkoutScreen({ navigation }: Props) {
 
       {step === 4 ? (
         <>
-          <Text style={styles.title}>调整训练参数</Text>
-          <Text style={styles.subtitle}>统一设置组数、次数范围和组间休息。</Text>
+          <Text style={styles.title}>确认训练参数</Text>
+          <Text style={styles.subtitle}>参数来自数据库动作目录，训练中可按实际情况调整重量和次数。</Text>
           <Card style={styles.parameterCard}>
-            <Parameter label="组数" value={`${sets}`} onMinus={() => setSets(Math.max(1, sets - 1))} onPlus={() => setSets(Math.min(8, sets + 1))} />
-            <Parameter label="次数" value="8–12" />
-            <Parameter label="休息" value="90 秒" />
-            <Parameter label="强度" value="中等 · RPE 7–8" />
+            {selectedExercises.map((exercise) => <View key={exercise.id} style={styles.parameterRow}><Text style={styles.parameterLabel}>{exercise.name}</Text><Text style={styles.parameterValue}>{exercise.sets} 组 · {exercise.reps} · {exercise.restSeconds}s</Text></View>)}
           </Card>
           <View style={styles.infoRow}><SlidersHorizontal size={18} color={colors.primary} /><Text style={styles.infoText}>训练中仍可单独调整每个动作的重量、次数和休息时间。</Text></View>
         </>
@@ -143,13 +145,13 @@ export function QuickWorkoutScreen({ navigation }: Props) {
       {step === 5 ? (
         <>
           <Text style={styles.title}>训练已生成</Text>
-          <Text style={styles.subtitle}>确认顺序后即可开始，预计用时约 45 分钟。</Text>
+          <Text style={styles.subtitle}>确认顺序后即可开始，预计用时约 {estimateMinutes(selectedExercises)} 分钟。</Text>
           <Card style={styles.summaryCard}>
             <View style={styles.summaryTop}><View><Text style={styles.summaryEyebrow}>{venue} · {target}</Text><Text style={styles.summaryTitle}>临时训练计划</Text></View><Tag tone="primary">{selectedExercises.length} 个动作</Tag></View>
             {selectedExercises.map((exercise, index) => (
               <View key={exercise.id} style={styles.summaryRow}>
                 <Text style={styles.summaryIndex}>{index + 1}</Text>
-                <View style={styles.summaryCopy}><Text style={styles.summaryName}>{exercise.name}</Text><Text style={styles.summaryMeta}>{sets} 组 · {exercise.reps} · 休息 {exercise.restSeconds} 秒</Text></View>
+                <View style={styles.summaryCopy}><Text style={styles.summaryName}>{exercise.name}</Text><Text style={styles.summaryMeta}>{exercise.sets} 组 · {exercise.reps} · 休息 {exercise.restSeconds} 秒</Text></View>
               </View>
             ))}
           </Card>
@@ -166,18 +168,11 @@ function Choice({ icon: Icon, label, active, onPress }: { icon: typeof Dumbbell;
   return <Pressable onPress={onPress} style={[styles.choice, active && styles.choiceActive]}><Icon size={25} color={active ? colors.primary : colors.textSecondary} /><Text style={[styles.choiceLabel, active && styles.choiceLabelActive]}>{label}</Text></Pressable>;
 }
 
-function Parameter({ label, value, onMinus, onPlus }: { label: string; value: string; onMinus?: () => void; onPlus?: () => void }) {
-  return (
-    <View style={styles.parameterRow}>
-      <Text style={styles.parameterLabel}>{label}</Text>
-      <View style={styles.parameterControl}>
-        {onMinus ? <Pressable onPress={onMinus} style={styles.stepperButton}><Minus size={17} color={colors.text} /></Pressable> : null}
-        <Text style={styles.parameterValue}>{value}</Text>
-        {onPlus ? <Pressable onPress={onPlus} style={styles.stepperButton}><Plus size={17} color={colors.text} /></Pressable> : null}
-      </View>
-    </View>
-  );
+function estimateMinutes(items: selectedExerciseShape[]) {
+  return Math.max(10, Math.round(items.reduce((total, exercise) => total + exercise.sets * (1 + exercise.restSeconds / 60), 0)));
 }
+
+type selectedExerciseShape = { sets: number; restSeconds: number };
 
 const styles = StyleSheet.create({
   content: { paddingBottom: spacing.x8 },
@@ -220,9 +215,7 @@ const styles = StyleSheet.create({
   parameterCard: { paddingVertical: 0 },
   parameterRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.x3, borderBottomWidth: 1, borderBottomColor: colors.divider },
   parameterLabel: { ...typography.body, color: colors.textSecondary },
-  parameterControl: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.x2 },
-  parameterValue: { minWidth: 88, ...typography.listTitle, color: colors.text, textAlign: 'center' },
-  stepperButton: { width: 44, height: 44, borderRadius: radius.control, backgroundColor: colors.control, alignItems: 'center', justifyContent: 'center' },
+  parameterValue: { ...typography.caption, color: colors.text, textAlign: 'right' },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.x3, marginTop: spacing.x4 },
   infoText: { flex: 1, ...typography.caption, color: colors.textSecondary },
   summaryCard: { paddingVertical: spacing.x2 },

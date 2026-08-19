@@ -11,33 +11,43 @@ import { trackEvent } from '../../services/analytics';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'WorkoutSummary'>;
 
-export function WorkoutSummaryScreen({ navigation }: Props) {
+export function WorkoutSummaryScreen({ navigation, route }: Props) {
   const { token } = useAuthState();
   const saved = useRef(false);
+  const summary = route.params ?? {};
+  const durationSeconds = summary.durationSeconds ?? 0;
+  const totalSets = summary.totalSets ?? 0;
+  const plannedSets = summary.plannedSets ?? totalSets;
+  const totalVolume = summary.totalVolume ?? 0;
+  const calories = summary.calories ?? 0;
+  const completionPercent = plannedSets > 0 ? Math.min(100, Math.round(totalSets / plannedSets * 100)) : 0;
+  const muscles = summary.muscles?.length ? summary.muscles : ['本次训练'];
   useEffect(() => {
     if (saved.current) return;
     saved.current = true;
-    trackEvent('workout_completed', { durationSeconds: 2732, totalSets: 16, totalVolume: 6240 }, { screenId: 'workout_summary' });
-    if (token) void saveWorkout(token, { title: '今日训练', durationSeconds: 2732, totalSets: 16, totalVolume: 6240, calories: 620, metadata: { muscles: ['胸大肌', '三角肌前束', '肱三头肌'] } }).catch((cause) => Alert.alert('训练记录保存失败', cause instanceof Error ? cause.message : '请稍后重试'));
-  }, [token]);
+    trackEvent('workout_completed', { durationSeconds, totalSets, totalVolume }, { screenId: 'workout_summary' });
+    if (token) void saveWorkout(token, { title: summary.title ?? '今日训练', durationSeconds, totalSets, totalVolume, calories, metadata: { muscles, plannedSets, completionPercent } }).catch((cause) => Alert.alert('训练记录保存失败', cause instanceof Error ? cause.message : '请稍后重试'));
+  }, [calories, completionPercent, durationSeconds, muscles, plannedSets, summary.title, token, totalSets, totalVolume]);
   return (
     <AppScreen contentStyle={styles.content}>
       <View style={styles.trophy}><Trophy size={52} color={colors.textInverse} strokeWidth={2.2} /></View>
       <Text style={styles.title}>训练完成</Text>
-      <Text style={styles.subtitle}>本次训练已经可靠保存</Text>
-      <View style={styles.metricRow}><SummaryMetric label="训练时长" value="45:32" /><SummaryMetric label="总组数" value="16" /><SummaryMetric label="总容量" value="6,240 kg" /></View>
+      <Text style={styles.subtitle}>本次训练数据已按实际输入生成</Text>
+      <View style={styles.metricRow}><SummaryMetric label="训练时长" value={formatDuration(durationSeconds)} /><SummaryMetric label="总组数" value={`${totalSets}`} /><SummaryMetric label="总容量" value={`${totalVolume.toLocaleString()} kg`} /></View>
       <Card style={styles.performance}>
         <Text style={styles.sectionTitle}>本次表现</Text>
-        <View style={styles.performanceRow}><Check size={18} color={colors.primary} /><Text style={styles.performanceText}>完成度 100%</Text></View>
-        <View style={styles.performanceRow}><Dumbbell size={18} color={colors.primary} /><Text style={styles.performanceText}>平均 RPE 7.2</Text></View>
-        <View style={styles.performanceRow}><Flame size={18} color={colors.primary} /><Text style={styles.performanceText}>消耗约 620 kcal</Text></View>
+        <View style={styles.performanceRow}><Check size={18} color={colors.primary} /><Text style={styles.performanceText}>完成度 {completionPercent}%</Text></View>
+        <View style={styles.performanceRow}><Dumbbell size={18} color={colors.primary} /><Text style={styles.performanceText}>动作组数 {totalSets} 组</Text></View>
+        <View style={styles.performanceRow}><Flame size={18} color={colors.primary} /><Text style={styles.performanceText}>消耗约 {calories} kcal</Text></View>
       </Card>
-      <Card style={styles.muscleCard}><Text style={styles.sectionTitle}>主要训练部位</Text><Text style={styles.muscles}>胸大肌 · 三角肌前束 · 肱三头肌</Text></Card>
+      <Card style={styles.muscleCard}><Text style={styles.sectionTitle}>主要训练部位</Text><Text style={styles.muscles}>{muscles.join(' · ')}</Text></Card>
       <PrimaryButton label="返回训练计划" onPress={() => navigation.popToTop()} style={styles.primary} />
-      <SecondaryButton label="查看详细数据" onPress={() => undefined} />
+      <SecondaryButton label="查看训练记录" onPress={() => navigation.navigate('History')} />
     </AppScreen>
   );
 }
+
+function formatDuration(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
 
 function SummaryMetric({ label, value }: { label: string; value: string }) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
 

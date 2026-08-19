@@ -12,7 +12,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
 export function AuthScreen({ navigation }: Props) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [phone, setPhone] = useState('138 6666 8888');
+  const [phone, setPhone] = useState('');
   const canSubmit = phone.replace(/\D/g, '').length === 11;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

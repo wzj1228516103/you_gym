@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Check, Dumbbell, Goal, Home, MapPin, PersonStanding, Scale, Trophy } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, Card, Chip, PrimaryButton, SecondaryButton, SegmentedControl } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { RootStackParamList } from '../../types';
@@ -15,12 +15,16 @@ const stepCopy = [
   ['你的训练目标', '选择当前最重要的主要目标'],
   ['你的训练经验', '用于调整动作难度和训练容量'],
   ['常用场地与器械', '可多选，推荐会优先使用可用条件'],
-  ['准备就绪', '首个推荐计划已经生成'],
+  ['准备就绪', '保存资料后即可从数据库计划库选择训练'],
 ] as const;
 
 export function OnboardingScreen({ navigation }: Props) {
   const [step, setStep] = useState(0);
   const [gender, setGender] = useState<'male' | 'female' | 'private'>('male');
+  const [birthYear, setBirthYear] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
+  const [bodyFatPct, setBodyFatPct] = useState('');
   const [goal, setGoal] = useState<GoalValue>('增肌');
   const [level, setLevel] = useState('新手');
   const [frequency, setFrequency] = useState('4次');
@@ -33,7 +37,20 @@ export function OnboardingScreen({ navigation }: Props) {
     if (step !== 4) { setStep((current) => current + 1); return; }
     if (!guest) {
       setSaving(true);
-      try { await updateProfile({ gender, goal, experienceLevel: level, weeklyFrequency: frequency, venue, equipment }); }
+      try {
+        await updateProfile({
+          gender,
+          birthYear: optionalNumber(birthYear),
+          heightCm: optionalNumber(heightCm),
+          weightKg: optionalNumber(weightKg),
+          bodyFatPct: optionalNumber(bodyFatPct),
+          goal,
+          experienceLevel: level,
+          weeklyFrequency: frequency,
+          venue,
+          equipment,
+        });
+      }
       finally { setSaving(false); }
     }
     navigation.replace('Main');
@@ -51,10 +68,10 @@ export function OnboardingScreen({ navigation }: Props) {
         {step === 0 ? (
           <>
             <SegmentedControl options={[{ label: '男性', value: 'male' }, { label: '女性', value: 'female' }, { label: '暂不公开', value: 'private' }]} value={gender} onChange={setGender} />
-            <DataRow label="出生年份" value="1995" />
-            <DataRow label="身高" value="175 cm" />
-            <DataRow label="体重" value="70 kg" accent />
-            <DataRow label="体脂率（可选）" value="15 %" />
+            <DataInputRow label="出生年份" value={birthYear} placeholder="例如 1995" onChangeText={setBirthYear} />
+            <DataInputRow label="身高" value={heightCm} placeholder="cm" onChangeText={setHeightCm} />
+            <DataInputRow label="体重" value={weightKg} placeholder="kg" onChangeText={setWeightKg} accent />
+            <DataInputRow label="体脂率（可选）" value={bodyFatPct} placeholder="%" onChangeText={setBodyFatPct} />
           </>
         ) : null}
 
@@ -97,9 +114,9 @@ export function OnboardingScreen({ navigation }: Props) {
             <Card style={styles.recommendation}>
               <View style={styles.planImage}><Dumbbell size={32} color={colors.muscle} /></View>
               <View style={styles.planCopy}>
-                <Text style={styles.planEyebrow}>推荐计划</Text>
-                <Text style={styles.planTitle}>新手全身训练（3天/周）</Text>
-                <Text style={styles.planMeta}>适合新手 · 健身房 · 35–50 分钟</Text>
+                <Text style={styles.planEyebrow}>训练资料</Text>
+                <Text style={styles.planTitle}>{goal} · 每周 {frequency}</Text>
+                <Text style={styles.planMeta}>{level} · {venue} · {equipment.length} 种可用器械</Text>
               </View>
             </Card>
             <Card style={styles.reasonCard}>
@@ -120,8 +137,13 @@ export function OnboardingScreen({ navigation }: Props) {
   );
 }
 
-function DataRow({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return <View style={styles.dataRow}><Text style={styles.dataLabel}>{label}</Text><Text style={[styles.dataValue, accent && styles.dataAccent]}>{value}</Text></View>;
+function DataInputRow({ label, value, placeholder, onChangeText, accent = false }: { label: string; value: string; placeholder: string; onChangeText: (value: string) => void; accent?: boolean }) {
+  return <View style={styles.dataRow}><Text style={styles.dataLabel}>{label}</Text><TextInput keyboardType="numeric" value={value} placeholder={placeholder} placeholderTextColor={colors.textTertiary} onChangeText={(next) => onChangeText(next.replace(/[^0-9.]/g, ''))} style={[styles.dataValue, accent && styles.dataAccent]} /></View>;
+}
+
+function optionalNumber(value: string) {
+  const parsed = Number(value);
+  return value.trim() && Number.isFinite(parsed) ? parsed : null;
 }
 
 function OptionCard({ title, description, active, onPress, icon: Icon, compact = false }: { title: string; description: string; active: boolean; onPress: () => void; icon: typeof Goal; compact?: boolean }) {
@@ -144,7 +166,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, marginTop: spacing.x6, gap: spacing.x3 },
   dataRow: { minHeight: 58, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.x4 },
   dataLabel: { ...typography.body, color: colors.textSecondary },
-  dataValue: { ...typography.body, color: colors.text },
+  dataValue: { minWidth: 110, ...typography.body, color: colors.text, textAlign: 'right', paddingVertical: spacing.x2 },
   dataAccent: { color: colors.primary, fontWeight: '700' },
   optionList: { gap: spacing.x2 },
   option: { minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: spacing.x3 },

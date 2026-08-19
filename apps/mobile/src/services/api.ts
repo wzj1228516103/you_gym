@@ -29,6 +29,25 @@ export type ExerciseContent = {
   anatomyNodeId: string; publishedAt: string;
 };
 
+export type ExerciseCatalogItem = {
+  id: string; nameZh: string; nameEn: string; targetMuscles: string[];
+  equipment: string; location: string; difficultyLevel: string | null;
+  recommendedReps: string | null; recommendedSets: number | null;
+  restSecondsMin: number | null; restSecondsMax: number | null;
+  angleViews: string[]; stepLabels: string[]; sourceImage: string | null;
+  sourcePanel: string | null; sourceNote: string | null;
+  resources: { id: string; resourceType: string; viewLabel: string; resourceUrl: string; sortOrder: number; sourceImage: string }[];
+};
+
+export type PlanSummary = {
+  id: string; title: string; description: string; durationLabel: string; level: string;
+  target: string; category: string; exerciseCount: number;
+};
+export type PlanDetail = PlanSummary & {
+  exercises: { id: string; nameZh: string; nameEn: string; equipment: string; location: string; sets: number; reps: string; restSeconds: number; sortOrder: number }[];
+};
+export type FoodItem = { id: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string };
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.ok) return response.status === 204 ? undefined as T : response.json() as Promise<T>;
   let message = `请求失败 (${response.status})`;
@@ -60,3 +79,8 @@ export function fetchWorkouts(token: string) { return request<{ items: WorkoutRe
 export function fetchNutrition(token: string) { return request<{ items: NutritionRecord[] }>('/api/v1/me/nutrition', {}, token); }
 export function fetchAnatomyTree(gender: 'male' | 'female' | 'all' = 'all') { return request<{ version: number; gender: string; view: string; items: AnatomyTreeNode[] }>(`/api/v1/anatomy/tree?gender=${gender}&view=all`); }
 export function fetchPublishedExerciseContent(search?: string, anatomyNodeId?: string) { const query = new URLSearchParams({ contentType: 'EXERCISE', limit: '20' }); if (search) query.set('search', search); if (anatomyNodeId) query.set('anatomyNodeId', anatomyNodeId); return request<{ items: ExerciseContent[] }>(`/api/v1/content?${query.toString()}`); }
+export function fetchExerciseCatalog(search?: string, equipment?: string) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); if (equipment) query.set('equipment', equipment); return request<{ items: ExerciseCatalogItem[]; source: string }>(`/api/v1/exercises?${query.toString()}`); }
+export function fetchPlans(category?: string, search?: string) { const query = new URLSearchParams({ limit: '100' }); if (category && category !== '全部') query.set('category', category); if (search) query.set('search', search); return request<{ items: PlanSummary[] }>(`/api/v1/plans?${query.toString()}`); }
+export function fetchPlan(id: string) { return request<PlanDetail>(`/api/v1/plans/${encodeURIComponent(id)}`); }
+export function fetchFoods(search?: string) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); return request<{ items: FoodItem[] }>(`/api/v1/foods?${query.toString()}`); }
+export function fetchFood(id: string) { return request<FoodItem>(`/api/v1/foods/${encodeURIComponent(id)}`); }

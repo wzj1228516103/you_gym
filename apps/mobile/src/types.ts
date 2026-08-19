@@ -33,6 +33,9 @@ export type Exercise = {
   steps: string[];
   mistakes: string[];
   safety: string;
+  sourceId?: string;
+  mediaUrl?: string;
+  sourceNote?: string;
 };
 
 export type RootStackParamList = {
@@ -55,15 +58,14 @@ export type PlanStackParamList = {
   QuickWorkout: undefined;
   History: undefined;
   Workout: undefined;
-  Rest: { seconds: number };
-  WorkoutSummary: undefined;
+  Rest: { seconds: number; setNumber?: number; weight?: number; reps?: number; exerciseName?: string };
+  WorkoutSummary: { title?: string; durationSeconds?: number; totalSets?: number; plannedSets?: number; totalVolume?: number; calories?: number; muscles?: string[] } | undefined;
 };
 
 export type NutritionStackParamList = {
   NutritionHome: undefined;
   FoodSearch: undefined;
   FoodDetail: { foodId: string };
-  MealRecord: { mealName: string };
 };
 
 export type ProfileStackParamList = {

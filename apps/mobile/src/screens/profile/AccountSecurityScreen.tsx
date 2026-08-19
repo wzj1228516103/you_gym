@@ -1,8 +1,7 @@
-import { useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronRight, KeyRound, LogOut, ShieldCheck, Smartphone, Trash2 } from 'lucide-react-native';
+import { ChevronRight, LogOut, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { AppScreen, Card, ScreenHeader, SettingRow } from '../../components/ui';
+import { AppScreen, Card, ScreenHeader } from '../../components/ui';
 import { useAuthState } from '../../state/AuthState';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { ProfileStackParamList } from '../../types';
@@ -11,13 +10,10 @@ type Props = NativeStackScreenProps<ProfileStackParamList, 'AccountSecurity'>;
 
 export function AccountSecurityScreen({ navigation }: Props) {
   const { user, logout } = useAuthState();
-  const [biometric, setBiometric] = useState(true);
   const maskedPhone = user?.phone ? `${user.phone.slice(0, 3)} **** ${user.phone.slice(-4)}` : '-';
   return <AppScreen contentStyle={styles.content}>
     <ScreenHeader title="账号与安全" onBack={navigation.goBack} />
-    <Card style={styles.status}><View style={styles.statusIcon}><ShieldCheck size={23} color={colors.success} /></View><View style={styles.statusCopy}><Text style={styles.statusTitle}>账号安全状态良好</Text><Text style={styles.statusText}>已绑定手机号 · 最近登录正常</Text></View></Card>
-    <Text style={styles.sectionTitle}>账号信息</Text><Card style={styles.group}><SettingRow icon={Smartphone} title="手机号" value={maskedPhone} onPress={() => undefined} /><SettingRow icon={KeyRound} title="修改密码" onPress={() => undefined} /><SettingRow icon={Smartphone} title="登录设备" value="当前设备" onPress={() => undefined} /></Card>
-    <Text style={styles.sectionTitle}>登录保护</Text><Card style={styles.group}><SettingRow icon={ShieldCheck} title="生物识别登录" toggle enabled={biometric} onToggle={setBiometric} /><SettingRow title="短信验证码" value="仅登录与重要通知" onPress={() => undefined} /></Card>
+    <Card style={styles.status}><View style={styles.statusIcon}><ShieldCheck size={23} color={colors.success} /></View><View style={styles.statusCopy}><Text style={styles.statusTitle}>{user ? '手机号已绑定' : '未登录'}</Text><Text style={styles.statusText}>{maskedPhone} · {user?.status ?? '无账号数据'}</Text></View></Card>
     <Text style={styles.sectionTitle}>数据操作</Text><Card style={styles.group}><ActionRow icon={LogOut} title="退出登录" onPress={() => Alert.alert('退出登录', '确定退出当前账号吗？', [{ text: '取消', style: 'cancel' }, { text: '退出', style: 'destructive', onPress: () => { void logout(); } }])} /><ActionRow icon={Trash2} title="删除账号" danger onPress={() => Alert.alert('删除账号', '删除账号功能将在数据保留策略确定后开放。')} /></Card>
     <Text style={styles.note}>短信服务仅用于验证码、账号安全和重要通知。</Text>
   </AppScreen>;

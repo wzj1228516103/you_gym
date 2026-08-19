@@ -28,10 +28,10 @@ export function RestScreen({ navigation, route }: Props) {
         </Svg>
         <Text style={styles.timer}>{formatTime(seconds)}</Text>
       </View>
-      <Text style={styles.next}>下一组开始</Text>
-      <Text style={styles.nextMeta}>第 2 组 · 80kg × 8–12 次</Text>
+      <Text style={styles.next}>{route.params.exerciseName ?? '下一组开始'}</Text>
+      <Text style={styles.nextMeta}>{route.params.setNumber ? `第 ${route.params.setNumber} 组` : '下一组'} · {route.params.weight ?? 0}kg × {route.params.reps ?? '-'} 次</Text>
       <View style={styles.adjustRow}><Pressable onPress={() => setSeconds((value) => Math.max(0, value - 10))} style={styles.adjust}><Minus size={20} color={colors.text} /><Text style={styles.adjustText}>10s</Text></Pressable><Pressable onPress={() => setSeconds((value) => value + 10)} style={styles.adjust}><Plus size={20} color={colors.text} /><Text style={styles.adjustText}>10s</Text></Pressable></View>
-      <Card style={styles.soundCard}><Volume2 size={20} color={colors.primary} /><View style={styles.soundCopy}><Text style={styles.soundTitle}>休息结束提示</Text><Text style={styles.soundMeta}>脉冲音效 2 · 震动开启</Text></View><BellRing size={20} color={colors.textSecondary} /></Card>
+      <Card style={styles.soundCard}><Volume2 size={20} color={colors.primary} /><View style={styles.soundCopy}><Text style={styles.soundTitle}>休息计时</Text><Text style={styles.soundMeta}>保持页面打开可查看实时倒计时</Text></View><BellRing size={20} color={colors.textSecondary} /></Card>
       <PrimaryButton label="跳过休息" onPress={navigation.goBack} style={styles.skip} />
     </AppScreen>
   );

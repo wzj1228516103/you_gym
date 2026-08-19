@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { ChevronRight, Search, X } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AppScreen, Card, Chip, IconButton, ScreenHeader } from '../../components/ui';
-import { foods } from '../../data/mockData';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppScreen, Card, IconButton, ScreenHeader } from '../../components/ui';
+import { fetchFoods, FoodItem } from '../../services/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
 import { trackEvent } from '../../services/analytics';
@@ -12,15 +13,21 @@ type Props = NativeStackScreenProps<NutritionStackParamList, 'FoodSearch'>;
 
 export function FoodSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('鸡胸肉');
-  const [tab, setTab] = useState('全部');
-  const results = useMemo(() => foods.filter((food) => food.name.includes(query.trim()) || !query.trim()), [query]);
+  const [results, setResults] = useState<FoodItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    let active = true; setLoading(true);
+    void fetchFoods(query).then((result) => { if (active) { setResults(result.items); setError(null); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '食物加载失败'); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [query]));
   useEffect(() => { trackEvent('nutrition_food_search_opened', { source: 'nutrition_home' }, { screenId: 'food_search' }); }, []);
   return (
     <AppScreen keyboard>
       <ScreenHeader title="食物搜索" onBack={navigation.goBack} />
       <View style={styles.searchBox}><Search size={19} color={colors.textSecondary} /><TextInput value={query} onChangeText={setQuery} placeholder="搜索食物" placeholderTextColor={colors.textTertiary} style={styles.input} />{query ? <IconButton icon={X} label="清除搜索" size={34} onPress={() => setQuery('')} /> : null}</View>
-      <View style={styles.tabs}>{['全部', '食物', '食谱', '我的'].map((item) => <Chip key={item} label={item} active={tab === item} onPress={() => setTab(item)} />)}</View>
-      <Text style={styles.count}>找到 {results.length} 个结果</Text>
+      <Text style={styles.count}>{loading ? '加载中…' : `找到 ${results.length} 个结果`}</Text>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
       {results.map((food) => (
         <Card key={food.id} onPress={() => { trackEvent('nutrition_item_selected', { foodId: food.id, source: 'food_search' }, { screenId: 'food_search' }); navigation.navigate('FoodDetail', { foodId: food.id }); }} accessibilityLabel={`查看${food.name}`} style={styles.foodCard}>
           <View style={styles.foodArt}><Text style={styles.foodEmoji}>◉</Text></View>
@@ -29,7 +36,6 @@ export function FoodSearchScreen({ navigation }: Props) {
           <ChevronRight size={17} color={colors.textTertiary} />
         </Card>
       ))}
-      <Pressable style={styles.customButton}><Text style={styles.customText}>添加自定义食物</Text></Pressable>
     </AppScreen>
   );
 }
@@ -37,7 +43,6 @@ export function FoodSearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   searchBox: { minHeight: 50, borderRadius: radius.control, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.control, flexDirection: 'row', alignItems: 'center', gap: spacing.x2, paddingLeft: spacing.x3 },
   input: { flex: 1, minHeight: 48, ...typography.body, color: colors.text, outlineStyle: 'none' } as never,
-  tabs: { flexDirection: 'row', gap: spacing.x2, marginTop: spacing.x3 },
   count: { ...typography.caption, color: colors.textSecondary, marginVertical: spacing.x4 },
   foodCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3, marginBottom: spacing.x2, padding: spacing.x3 },
   foodArt: { width: 56, height: 56, borderRadius: radius.card, backgroundColor: '#20230F', alignItems: 'center', justifyContent: 'center' },
@@ -46,6 +51,5 @@ const styles = StyleSheet.create({
   foodName: { ...typography.listTitle, color: colors.text },
   foodMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   source: { ...typography.eyebrow, color: colors.textTertiary },
-  customButton: { minHeight: 48, borderRadius: radius.control, borderWidth: 1, borderColor: colors.primaryBorder, alignItems: 'center', justifyContent: 'center', marginTop: spacing.x3 },
-  customText: { ...typography.button, color: colors.primary },
+  error: { ...typography.caption, color: colors.error, marginBottom: spacing.x3 },
 });

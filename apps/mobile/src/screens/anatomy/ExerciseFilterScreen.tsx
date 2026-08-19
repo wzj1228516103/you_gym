@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Bookmark, ChevronRight, Dumbbell, SearchX, SlidersHorizontal, Star } from 'lucide-react-native';
+import { Bookmark, ChevronRight, Dumbbell, SearchX, SlidersHorizontal } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, IconButton, ScreenHeader, Tag } from '../../components/ui';
 import { useAppState } from '../../state/AppState';
@@ -21,7 +21,6 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
   const [location, setLocation] = useState('全部');
   const [equipment, setEquipment] = useState('全部');
   const [level, setLevel] = useState('全部');
-  const [sort, setSort] = useState<'推荐' | '评分'>('推荐');
   const [bookmarked, setBookmarked] = useState<string[]>([]);
 
   const results = useMemo(() => exercises.filter((exercise) => (
@@ -29,7 +28,7 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
     && (location === '全部' || exercise.location === location)
     && (equipment === '全部' || exercise.equipment === equipment)
     && (level === '全部' || exercise.level === level)
-  )).sort((a, b) => sort === '评分' ? b.rating - a.rating : node.exerciseIds.indexOf(a.id) - node.exerciseIds.indexOf(b.id)), [equipment, level, location, node.exerciseIds, sort]);
+  )).sort((a, b) => node.exerciseIds.indexOf(a.id) - node.exerciseIds.indexOf(b.id)), [equipment, exercises, level, location, node.exerciseIds]);
 
   return (
     <AppScreen>
@@ -42,7 +41,7 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
 
       <View style={styles.resultHeader}>
         <Text style={styles.resultCount}>找到 {results.length} 个动作</Text>
-        <View style={styles.sortRow}>{(['推荐', '评分'] as const).map((item) => <Chip key={item} label={item} active={sort === item} onPress={() => setSort(item)} />)}</View>
+        <Tag>数据库动作</Tag>
       </View>
 
       {results.length === 0 ? (
@@ -58,7 +57,7 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
           <View style={styles.exerciseCopy}>
             <Text style={styles.exerciseName}>{exercise.name}</Text>
             <Text style={styles.exerciseMeta}>{exercise.equipment} · {exercise.target}</Text>
-            <View style={styles.ratingRow}><Star size={13} color={colors.warning} fill={colors.warning} /><Text style={styles.rating}>{exercise.rating}</Text><Tag>{exercise.level}</Tag></View>
+            <View style={styles.ratingRow}>{exercise.rating > 0 ? <Text style={styles.rating}>{exercise.rating} 分</Text> : null}<Tag>{exercise.level}</Tag></View>
           </View>
           <Pressable hitSlop={10} onPress={(event) => { event.stopPropagation(); setBookmarked((current) => current.includes(exercise.id) ? current.filter((id) => id !== exercise.id) : [...current, exercise.id]); }}>
             <Bookmark size={20} color={bookmarked.includes(exercise.id) ? colors.primary : colors.textSecondary} fill={bookmarked.includes(exercise.id) ? colors.primary : 'transparent'} />
@@ -87,7 +86,6 @@ const styles = StyleSheet.create({
   filterScroll: { gap: spacing.x2 },
   resultHeader: { minHeight: 58, marginTop: spacing.x4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   resultCount: { ...typography.body, color: colors.text, fontWeight: '700' },
-  sortRow: { flexDirection: 'row', gap: spacing.x2 },
   exerciseCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3, marginBottom: spacing.x2, padding: spacing.x3 },
   exerciseArt: { width: 64, height: 64, flexShrink: 0, borderRadius: radius.card, backgroundColor: '#0E0F12', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,45,85,0.22)' },
   exerciseCopy: { flex: 1, minWidth: 0 },

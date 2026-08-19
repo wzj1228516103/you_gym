@@ -1,8 +1,10 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { CalendarDays, ChevronRight, Dumbbell, Library, Play, Settings2, Zap } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { AppScreen, Card, IconButton, PrimaryButton, ProgressBar, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
-import { plans } from '../../data/mockData';
+import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
+import { fetchPlans, PlanSummary } from '../../services/api';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { PlanStackParamList } from '../../types';
@@ -11,18 +13,25 @@ type Props = NativeStackScreenProps<PlanStackParamList, 'PlanHome'>;
 
 export function PlanHomeScreen({ navigation }: Props) {
   const { todayExercises } = useAppState();
+  const [plans, setPlans] = useState<PlanSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void fetchPlans().then((result) => { if (active) { setPlans(result.items); setError(null); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '计划加载失败'); });
+    return () => { active = false; };
+  }, []));
+  const featuredPlan = plans[0];
 
   return (
     <AppScreen>
       <ScreenHeader title="训练计划" actions={<IconButton icon={Settings2} label="计划设置" size={42} />} />
 
       <Card style={styles.todayCard}>
-        <View style={styles.cardTop}><View><Text style={styles.eyebrow}>今日训练</Text><Text style={styles.todayTitle}>推 B · 第 2 天</Text></View><Tag tone="primary">进行中</Tag></View>
-        <Text style={styles.todayMeta}>第 4 周 · 胸肩力量 · 约 48 分钟</Text>
-        <View style={styles.progressCopy}><Text style={styles.progressLabel}>计划进度</Text><Text style={styles.progressLabel}>4 / 6 次</Text></View>
-        <ProgressBar value={4 / 6} />
-        <PrimaryButton label="开始训练" icon={Play} onPress={() => navigation.navigate('Workout')} style={styles.startButton} />
+        <View style={styles.cardTop}><View><Text style={styles.eyebrow}>推荐训练计划</Text><Text style={styles.todayTitle}>{featuredPlan?.title ?? '训练计划'}</Text></View><Tag tone="primary">数据库计划</Tag></View>
+        <Text style={styles.todayMeta}>{featuredPlan ? `${featuredPlan.durationLabel} · ${featuredPlan.target}` : '正在加载计划目录…'}</Text>
+        <PrimaryButton label="查看计划" icon={Play} disabled={!featuredPlan} onPress={() => { if (featuredPlan) navigation.navigate('PlanDetail', { planId: featuredPlan.id }); }} style={styles.startButton} />
       </Card>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.quickRow}>
         <QuickAction icon={Zap} label="快速训练" onPress={() => navigation.navigate('QuickWorkout')} />
@@ -31,6 +40,7 @@ export function PlanHomeScreen({ navigation }: Props) {
       </View>
 
       <SectionHeader title="今日动作" action={`${todayExercises.length} 个动作`} />
+      {todayExercises.length === 0 ? <Card><Text style={styles.empty}>从计划库或快速训练选择动作后，训练队列会显示在这里。</Text></Card> : null}
       {todayExercises.map((exercise, index) => (
         <View key={exercise.id} style={styles.exerciseRow}>
           <View style={styles.exerciseNumber}><Text style={styles.exerciseNumberText}>{index + 1}</Text></View>
@@ -43,7 +53,7 @@ export function PlanHomeScreen({ navigation }: Props) {
       {plans.slice(0, 2).map((plan) => (
         <Card key={plan.id} onPress={() => navigation.navigate('PlanDetail', { planId: plan.id })} accessibilityLabel={`查看${plan.title}`} style={styles.planCard}>
           <View style={styles.planArt}><Dumbbell size={26} color={colors.muscle} /></View>
-          <View style={styles.planCopy}><Text style={styles.planTitle}>{plan.title}</Text><Text style={styles.planMeta}>{plan.duration} · {plan.level}</Text><Text style={styles.planTarget}>{plan.target}</Text></View>
+          <View style={styles.planCopy}><Text style={styles.planTitle}>{plan.title}</Text><Text style={styles.planMeta}>{plan.durationLabel} · {plan.level}</Text><Text style={styles.planTarget}>{plan.target}</Text></View>
           <ChevronRight size={18} color={colors.textTertiary} />
         </Card>
       ))}
@@ -80,4 +90,6 @@ const styles = StyleSheet.create({
   planMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   planTarget: { ...typography.caption, color: colors.primary, marginTop: spacing.x1 },
   pressed: { opacity: 0.78 },
+  error: { ...typography.caption, color: colors.error, marginTop: spacing.x3 },
+  empty: { ...typography.body, color: colors.textSecondary },
 });

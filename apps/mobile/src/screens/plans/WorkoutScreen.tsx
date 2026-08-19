@@ -1,36 +1,70 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { CircleHelp, Dumbbell, Info, Minus, Plus } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dumbbell, Info, Minus, Plus } from 'lucide-react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SecondaryButton, Tag } from '../../components/ui';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
+import { API_BASE_URL } from '../../services/api';
 import type { PlanStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'Workout'>;
 
 export function WorkoutScreen({ navigation }: Props) {
   const { todayExercises } = useAppState();
-  const exercise = todayExercises[0];
+  const [exerciseIndex, setExerciseIndex] = useState(0);
   const [currentSet, setCurrentSet] = useState(1);
-  const [weight, setWeight] = useState(80);
-  const [reps, setReps] = useState(8);
+  const [weight, setWeight] = useState(0);
+  const [reps, setReps] = useState(Number(todayExercises[0]?.reps.match(/\d+/)?.[0] ?? 8));
+  const [completedSets, setCompletedSets] = useState(0);
+  const [completedVolume, setCompletedVolume] = useState(0);
+  const startedAt = useRef(Date.now());
+  const exercise = todayExercises[exerciseIndex];
 
   if (!exercise) return null;
 
+  const openSummary = (totalSets: number, totalVolume: number) => {
+    const durationSeconds = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
+    navigation.replace('WorkoutSummary', {
+      title: todayExercises.length === 1 ? exercise.name : '组合训练',
+      durationSeconds,
+      totalSets,
+      plannedSets: todayExercises.reduce((sum, item) => sum + item.sets, 0),
+      totalVolume: Number(totalVolume.toFixed(1)),
+      calories: Math.max(1, Math.round(durationSeconds / 6)),
+      muscles: Array.from(new Set(todayExercises.map((item) => item.target))),
+    });
+  };
+
   const complete = () => {
-    if (currentSet >= exercise.sets) navigation.replace('WorkoutSummary');
+    const nextCompletedSets = completedSets + 1;
+    const nextCompletedVolume = completedVolume + weight * reps;
+    setCompletedSets(nextCompletedSets);
+    setCompletedVolume(nextCompletedVolume);
+    if (currentSet >= exercise.sets) {
+      const nextExercise = todayExercises[exerciseIndex + 1];
+      if (!nextExercise) {
+        openSummary(nextCompletedSets, nextCompletedVolume);
+        return;
+      }
+      const nextReps = Number(nextExercise.reps.match(/\d+/)?.[0] ?? 8);
+      setExerciseIndex((value) => value + 1);
+      setCurrentSet(1);
+      setWeight(0);
+      setReps(nextReps);
+      navigation.navigate('Rest', { seconds: nextExercise.restSeconds, setNumber: 1, weight: 0, reps: nextReps, exerciseName: nextExercise.name });
+    }
     else {
       setCurrentSet((value) => value + 1);
-      navigation.navigate('Rest', { seconds: exercise.restSeconds });
+      navigation.navigate('Rest', { seconds: exercise.restSeconds, setNumber: currentSet + 1, weight, reps, exerciseName: exercise.name });
     }
   };
 
   return (
     <AppScreen>
       <ScreenHeader title={exercise.name} onBack={navigation.goBack} actions={<IconButton icon={Info} label="训练信息" size={42} />} />
-      <Text style={styles.progress}>第 1 个动作 · 第 {currentSet} / {exercise.sets} 组</Text>
-      <View style={styles.media}><Dumbbell size={68} color={colors.muscle} /><Text style={styles.mediaText}>动作示范媒体占位</Text></View>
+      <Text style={styles.progress}>第 {exerciseIndex + 1} / {todayExercises.length} 个动作 · 第 {currentSet} / {exercise.sets} 组</Text>
+      <View style={styles.media}>{exercise.mediaUrl ? <Image source={{ uri: exercise.mediaUrl.startsWith('http') ? exercise.mediaUrl : `${API_BASE_URL}${exercise.mediaUrl}` }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={68} color={colors.muscle} />}<Text style={styles.mediaText}>{exercise.mediaUrl ? '动作目录媒体' : '暂无动作媒体'}</Text></View>
       <View style={styles.paramTags}><Tag>{exercise.reps}</Tag><Tag>{weight} kg</Tag><Tag>休息 {exercise.restSeconds}s</Tag></View>
 
       <Card style={styles.controlCard}>
@@ -42,7 +76,7 @@ export function WorkoutScreen({ navigation }: Props) {
       </Card>
 
       <View style={styles.completedRow}><Text style={styles.completedLabel}>已完成</Text>{Array.from({ length: exercise.sets }, (_, index) => <View key={index} style={[styles.setDot, index < currentSet - 1 && styles.setDotDone, index === currentSet - 1 && styles.setDotCurrent]}><Text style={[styles.setDotText, index <= currentSet - 1 && styles.setDotTextActive]}>{index + 1}</Text></View>)}</View>
-      <View style={styles.buttonRow}><SecondaryButton label="结束训练" onPress={() => navigation.replace('WorkoutSummary')} style={styles.endButton} /><PrimaryButton label={currentSet >= exercise.sets ? '完成训练' : '完成本组'} onPress={complete} style={styles.completeButton} /></View>
+      <View style={styles.buttonRow}><SecondaryButton label="结束训练" onPress={() => openSummary(completedSets, completedVolume)} style={styles.endButton} /><PrimaryButton label={currentSet >= exercise.sets && exerciseIndex === todayExercises.length - 1 ? '完成训练' : '完成本组'} onPress={complete} style={styles.completeButton} /></View>
     </AppScreen>
   );
 }
@@ -54,7 +88,8 @@ function Stepper({ value, suffix, onMinus, onPlus, decimal = false }: { value: n
 const styles = StyleSheet.create({
   progress: { ...typography.caption, color: colors.textSecondary, marginTop: -spacing.x3, marginBottom: spacing.x3 },
   media: { height: 230, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: '#0E0F12', alignItems: 'center', justifyContent: 'center' },
-  mediaText: { ...typography.caption, color: colors.textTertiary, marginTop: spacing.x3 },
+  mediaImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%', borderRadius: radius.card },
+  mediaText: { ...typography.caption, color: colors.textTertiary, position: 'absolute', left: spacing.x3, bottom: spacing.x3, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: spacing.x2, paddingVertical: spacing.x1, borderRadius: radius.small },
   paramTags: { flexDirection: 'row', gap: spacing.x2, marginTop: spacing.x3 },
   controlCard: { marginTop: spacing.x4 },
   controlLabel: { ...typography.caption, color: colors.textSecondary, textAlign: 'center' },

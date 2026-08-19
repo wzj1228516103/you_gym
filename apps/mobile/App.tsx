@@ -24,7 +24,6 @@ import { WorkoutSummaryScreen } from './src/screens/plans/WorkoutSummaryScreen';
 import { FoodDetailScreen } from './src/screens/nutrition/FoodDetailScreen';
 import { FoodSearchScreen } from './src/screens/nutrition/FoodSearchScreen';
 import { NutritionHomeScreen } from './src/screens/nutrition/NutritionHomeScreen';
-import { MealRecordScreen } from './src/screens/nutrition/MealRecordScreen';
 import { AccountSecurityScreen } from './src/screens/profile/AccountSecurityScreen';
 import { BodyDataScreen } from './src/screens/profile/BodyDataScreen';
 import { HelpScreen } from './src/screens/profile/HelpScreen';
@@ -62,7 +61,7 @@ function PlanNavigator() {
 }
 
 function NutritionNavigator() {
-  return <NutritionStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><NutritionStack.Screen name="NutritionHome" component={NutritionHomeScreen} /><NutritionStack.Screen name="FoodSearch" component={FoodSearchScreen} /><NutritionStack.Screen name="FoodDetail" component={FoodDetailScreen} /><NutritionStack.Screen name="MealRecord" component={MealRecordScreen} /></NutritionStack.Navigator>;
+  return <NutritionStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><NutritionStack.Screen name="NutritionHome" component={NutritionHomeScreen} /><NutritionStack.Screen name="FoodSearch" component={FoodSearchScreen} /><NutritionStack.Screen name="FoodDetail" component={FoodDetailScreen} /></NutritionStack.Navigator>;
 }
 
 function ProfileNavigator() {

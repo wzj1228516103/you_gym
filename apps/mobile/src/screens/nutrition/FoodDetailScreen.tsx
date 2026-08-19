@@ -1,31 +1,53 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Minus, Plus, Utensils } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, PrimaryButton, ScreenHeader, SegmentedControl } from '../../components/ui';
-import { foods } from '../../data/mockData';
+import { fetchFood, FoodItem, saveNutrition } from '../../services/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
+import { useAuthState } from '../../state/AuthState';
 
 type Props = NativeStackScreenProps<NutritionStackParamList, 'FoodDetail'>;
+const mealLabels = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' } as const;
 
 export function FoodDetailScreen({ navigation, route }: Props) {
-  const food = foods.find((item) => item.id === route.params.foodId) ?? foods[0];
+  const { token } = useAuthState();
+  const [food, setFood] = useState<FoodItem | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [meal, setMeal] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
   const [grams, setGrams] = useState(150);
+  const [saving, setSaving] = useState(false);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void fetchFood(route.params.foodId).then((result) => { if (active) { setFood(result); setError(null); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '食物加载失败'); });
+    return () => { active = false; };
+  }, [route.params.foodId]));
+  if (!food) return <AppScreen><ScreenHeader title="食物详情" onBack={navigation.goBack} /><Text style={styles.noteText}>{error ?? '食物加载中…'}</Text></AppScreen>;
+  const loadedFood = food;
   const ratio = grams / 100;
+  async function addMeal() {
+    if (!token) { Alert.alert('需要登录', '游客模式不会同步饮食记录，请登录后再保存。'); return; }
+    setSaving(true);
+    try {
+      await saveNutrition(token, { mealName: mealLabels[meal], calories: Math.round(loadedFood.calories * ratio), proteinG: Number((loadedFood.protein * ratio).toFixed(1)), carbohydratesG: Number((loadedFood.carbs * ratio).toFixed(1)), fatG: Number((loadedFood.fat * ratio).toFixed(1)), foodCount: 1, metadata: { foods: [{ id: loadedFood.id, name: loadedFood.name, grams }] } });
+      navigation.popToTop();
+    } catch (cause) { Alert.alert('保存失败', cause instanceof Error ? cause.message : '请稍后重试'); }
+    finally { setSaving(false); }
+  }
   return (
     <AppScreen>
-      <ScreenHeader title={food.name} onBack={navigation.goBack} />
-      <View style={styles.hero}><Utensils size={58} color={colors.primary} /><Text style={styles.source}>来源：{food.source}</Text></View>
-      <View style={styles.calorieRow}><Text style={styles.calories}>{Math.round(food.calories * ratio)} kcal</Text><Text style={styles.serving}>{grams} g</Text></View>
-      <View style={styles.macroRow}><Nutrient label="蛋白质" value={`${(food.protein * ratio).toFixed(1)} g`} /><Nutrient label="碳水" value={`${(food.carbs * ratio).toFixed(1)} g`} /><Nutrient label="脂肪" value={`${(food.fat * ratio).toFixed(1)} g`} /></View>
+      <ScreenHeader title={loadedFood.name} onBack={navigation.goBack} />
+      <View style={styles.hero}><Utensils size={58} color={colors.primary} /><Text style={styles.source}>来源：{loadedFood.source}</Text></View>
+      <View style={styles.calorieRow}><Text style={styles.calories}>{Math.round(loadedFood.calories * ratio)} kcal</Text><Text style={styles.serving}>{grams} g</Text></View>
+      <View style={styles.macroRow}><Nutrient label="蛋白质" value={`${(loadedFood.protein * ratio).toFixed(1)} g`} /><Nutrient label="碳水" value={`${(loadedFood.carbs * ratio).toFixed(1)} g`} /><Nutrient label="脂肪" value={`${(loadedFood.fat * ratio).toFixed(1)} g`} /></View>
       <Text style={styles.label}>记录到餐次</Text>
       <SegmentedControl options={[{ label: '早餐', value: 'breakfast' }, { label: '午餐', value: 'lunch' }, { label: '晚餐', value: 'dinner' }, { label: '加餐', value: 'snack' }]} value={meal} onChange={setMeal} />
       <Text style={styles.label}>份量</Text>
       <Card style={styles.stepper}><Pressable onPress={() => setGrams((value) => Math.max(50, value - 50))} style={styles.stepButton}><Minus size={22} color={colors.text} /></Pressable><View style={styles.amount}><Text style={styles.amountValue}>{grams}</Text><Text style={styles.amountUnit}>克</Text></View><Pressable onPress={() => setGrams((value) => value + 50)} style={styles.stepButton}><Plus size={22} color={colors.text} /></Pressable></Card>
       <Card style={styles.note}><Text style={styles.noteTitle}>数据说明</Text><Text style={styles.noteText}>营养数据按所选份量估算，实际数值可能因品牌、烹饪方式和含水量而变化。</Text></Card>
-      <PrimaryButton label="加入餐次" onPress={() => navigation.popToTop()} style={styles.add} />
+      <PrimaryButton label={saving ? '保存中…' : '加入餐次'} onPress={() => void addMeal()} disabled={saving} style={styles.add} />
     </AppScreen>
   );
 }

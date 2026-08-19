@@ -7,7 +7,7 @@ import { useAppState } from '../../state/AppState';
 import { serverAnatomyId } from '../../data/anatomyMerge';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
-import { ExerciseContent, fetchPublishedExerciseContent } from '../../services/api';
+import { API_BASE_URL, ExerciseContent, fetchPublishedExerciseContent } from '../../services/api';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseDetail'>;
@@ -18,6 +18,7 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
   const [saved, setSaved] = useState(false);
   const [content, setContent] = useState<ExerciseContent | null>(null);
   const added = todayExerciseIds.includes(exercise.id);
+  const catalogMediaUrl = exercise.mediaUrl?.startsWith('http') ? exercise.mediaUrl : exercise.mediaUrl ? `${API_BASE_URL}${exercise.mediaUrl}` : undefined;
 
   useEffect(() => {
     trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: exercise.name }, { screenId: 'exercise_detail' });
@@ -41,12 +42,12 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
       <View style={styles.metaRow}><Tag>{exercise.target}</Tag><Tag>{exercise.equipment}</Tag><Tag>{exercise.location}</Tag></View>
 
       <View style={styles.media}>
-        {content?.mediaUrl ? <Image source={{ uri: content.mediaUrl }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />}
+        {content?.mediaUrl || catalogMediaUrl ? <Image source={{ uri: content?.mediaUrl || catalogMediaUrl }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />}
         <View style={styles.playButton}><Play size={24} color={colors.text} fill={colors.text} /></View>
         <Text style={styles.mediaNote}>{content ? `${content.contentType === 'VIDEO' ? '视频' : content.contentType === 'GIF' ? 'GIF' : content.contentType === 'MODEL_3D' ? '3D 模型' : '训练内容'} · 已发布` : '动作媒体待授权 · 当前显示训练占位'}</Text>
       </View>
 
-      <View style={styles.ratingRow}><Star size={16} color={colors.warning} fill={colors.warning} /><Text style={styles.rating}>{exercise.rating}</Text><Text style={styles.ratingMeta}>专业内容已审核</Text></View>
+      <View style={styles.ratingRow}>{exercise.rating > 0 ? <><Star size={16} color={colors.warning} fill={colors.warning} /><Text style={styles.rating}>{exercise.rating}</Text></> : <Text style={styles.rating}>数据库动作目录</Text>}<Text style={styles.ratingMeta}>{exercise.sourceId ? '来自动作目录' : '本地兼容数据'}</Text></View>
 
       <View style={styles.parameterGrid}>
         <Parameter label="组数" value={`${exercise.sets}`} />

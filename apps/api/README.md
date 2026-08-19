@@ -93,6 +93,10 @@ GET   /api/v1/anatomy/tree?gender=all&view=all
 GET   /api/v1/content?contentType=EXERCISE&search=动作名称
 GET   /api/v1/exercises?search=深蹲&equipment=杠铃
 GET   /api/v1/exercises/{id}
+GET   /api/v1/plans?category=增肌&search=推
+GET   /api/v1/plans/{id}
+GET   /api/v1/foods?search=鸡胸
+GET   /api/v1/foods/{id}
 ```
 
 Local mock integration mode accepts the experience verification code `123456`.
@@ -141,7 +145,7 @@ The Expo client reads `EXPO_PUBLIC_API_BASE_URL` and uploads queued events when 
 
 The current event vocabulary includes community navigation, screen views, body-region and muscle selection, exercise filtering/detail views, workout lifecycle, nutrition views, and training check-ins. New event names should be added to the mobile union before they are emitted so the client and API contract stay reviewable.
 
-The admin analytics area also exposes a nutrition behavior view. It aggregates anonymous nutrition screen views, food searches, food selections, and meal-record actions, with meal-name distribution and CSV export. This is intentionally behavior analytics only: the current mobile nutrition screens use mock food data and do not yet persist user nutrition records or expose identifiable dietary details in the admin panel.
+The admin analytics area also exposes a nutrition behavior view. It aggregates anonymous nutrition screen views, food searches, food selections, and meal-record actions, with meal-name distribution and CSV export. The mobile catalog now reads the persisted `food_catalog` table and meal records are stored for authenticated users; the analytics view remains behavior-only and does not expose identifiable dietary details.
 
 The user directory currently aggregates analytics identities with first/last seen time, event count, and platform. Anonymous IDs are labeled as guests, and non-anonymous analytics IDs are labeled as identified. It is not an App account database: phone numbers, profile fields, account locking, and device/session management remain reserved for the future mobile authentication module.
 
