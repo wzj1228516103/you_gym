@@ -170,6 +170,26 @@ class AnalyticsControllerIntegrationTest {
     }
 
     @Test
+    void exposesAggregatedAnalyticsUsersWithoutPii() throws Exception {
+        String body = "{\"events\":[{\"eventId\":\"users-001\",\"eventName\":\"screen_viewed\",\"occurredAt\":\"2026-08-18T05:00:00Z\",\"sessionId\":\"users-session\",\"analyticsUserId\":\"anonymous-user-001\",\"platform\":\"android\"}]}";
+        mockMvc.perform(post("/api/v1/analytics/events:batch").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted", is(1)));
+        mockMvc.perform(get("/api/admin/v1/analytics/users")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .param("from", "2026-08-18T00:00:00Z").param("to", "2026-08-19T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].analyticsUserId", is("anonymous-user-001")))
+                .andExpect(jsonPath("$.items[0].eventCount", is(1)))
+                .andExpect(jsonPath("$.items[0].platform", is("android")));
+        mockMvc.perform(get("/api/admin/v1/analytics/users.csv")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .param("from", "2026-08-18T00:00:00Z").param("to", "2026-08-19T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", containsString("analytics-users.csv")))
+                .andExpect(content().string(containsString("anonymous-user-001")));
+    }
+
+    @Test
     void managesContentDraftsPublishesThemAndRestrictsEmployeeWrites() throws Exception {
         String body = """
                 {"title":"手臂训练基础","contentType":"ARTICLE","summary":"肱二头肌与肱三头肌的基础训练说明","body":"先完成热身，再进行动作练习。","mediaUrl":"https://example.test/arm.md","anatomyNodeId":"muscle.biceps-brachii"}

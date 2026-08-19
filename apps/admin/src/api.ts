@@ -53,6 +53,14 @@ export type AnalyticsEvent = {
   propertiesJson: string;
 };
 
+export type AnalyticsUser = {
+  analyticsUserId: string;
+  eventCount: number;
+  firstSeen: string;
+  lastSeen: string;
+  platform: string | null;
+};
+
 export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE';
 
 export type AdminSession = {
@@ -212,6 +220,14 @@ export function fetchNutritionDashboard(token: string, from?: string, to?: strin
   return request<NutritionDashboard>(`/api/admin/v1/analytics/nutrition?${params.toString()}`, token);
 }
 
+export function fetchAnalyticsUsers(token: string, from?: string, to?: string, search?: string) {
+  const params = new URLSearchParams({ limit: '200' });
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (search) params.set('search', search);
+  return request<{ from: string; to: string; items: AnalyticsUser[] }>(`/api/admin/v1/analytics/users?${params.toString()}`, token);
+}
+
 export function fetchAdminSession(token: string) {
   return request<AdminSession>('/api/admin/v1/session', token);
 }
@@ -353,6 +369,12 @@ export async function downloadAnalyticsCsv(token: string) {
 
 export async function downloadNutritionCsv(token: string) {
   const response = await fetch(`${API_BASE_URL}/api/admin/v1/analytics/nutrition.csv?limit=10000`, { headers: authHeaders(token) });
+  if (!response.ok) throw new Error(response.status === 401 ? '管理 Token 无效或已过期' : `导出失败（${response.status}）`);
+  return response.blob();
+}
+
+export async function downloadAnalyticsUsersCsv(token: string) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/analytics/users.csv?limit=10000`, { headers: authHeaders(token) });
   if (!response.ok) throw new Error(response.status === 401 ? '管理 Token 无效或已过期' : `导出失败（${response.status}）`);
   return response.blob();
 }

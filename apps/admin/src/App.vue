@@ -3,10 +3,10 @@ import { computed, onMounted, ref } from 'vue';
 import AdminAuthView from './AdminAuthView.vue';
 import DashboardChart from './components/DashboardChart.vue';
 import {
-  createAdminAccount, createContent, downloadAnalyticsCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
-  fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchContent, fetchNutritionDashboard,
+  createAdminAccount, createContent, downloadAnalyticsCsv, downloadAnalyticsUsersCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
+  fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchAnalyticsUsers, fetchContent, fetchNutritionDashboard,
   deleteContent, deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
-  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type NutritionDashboard,
+  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
 
@@ -28,6 +28,8 @@ const adminSessions = ref<AdminSessionView[]>([]);
 const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
 const nutrition = ref<NutritionDashboard | null>(null);
+const analyticsUsers = ref<AnalyticsUser[]>([]);
+const userSearch = ref('');
 const contentStatusFilter = ref<ContentStatus | ''>('');
 const contentTypeFilter = ref<ContentType | ''>('');
 const contentSearch = ref('');
@@ -229,7 +231,7 @@ async function refresh() {
     role.value = session.role;
     permissions.value = session.permissions;
     const { from, to } = rangeBounds();
-    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextNutrition] = await Promise.all([
+    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextNutrition, nextUsers] = await Promise.all([
       fetchAnalyticsDashboard(token.value, from, to),
       fetchAnalyticsSummary(token.value, from, to),
       fetchAnalyticsEvents(token.value, selectedEvent.value || undefined),
@@ -239,6 +241,7 @@ async function refresh() {
       session.permissions.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
       session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
+      session.permissions.includes('ANALYTICS_READ') ? fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined) : Promise.resolve({ items: [] as AnalyticsUser[] }),
     ]);
     dashboard.value = nextDashboard;
     summary.value = nextSummary;
@@ -249,10 +252,11 @@ async function refresh() {
     anatomyNodes.value = nextAnatomy.items;
     contentItems.value = nextContent.items;
     nutrition.value = nextNutrition;
+    analyticsUsers.value = nextUsers.items;
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null;
+    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = [];
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { loading.value = false; }
 }
@@ -267,9 +271,10 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; } }
+async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = []; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
+async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
 onMounted(() => { if (token.value) void refresh(); });
 </script>
 
@@ -280,6 +285,7 @@ onMounted(() => { if (token.value) void refresh(); });
       <div class="brand"><span class="brand-mark">YG</span><span>YOU GYM</span></div>
       <nav class="nav" aria-label="后台导航">
         <a class="nav-item active" href="#analytics">埋点仪表盘</a>
+        <a v-if="canReadAnalytics" class="nav-item" href="#users">用户管理</a>
         <a v-if="canReadAnalytics" class="nav-item" href="#nutrition">饮食管理</a>
         <a v-if="canReadContent" class="nav-item" href="#content">内容中心</a>
         <a v-if="role !== 'EMPLOYEE'" class="nav-item" href="#anatomy">解剖中心</a>
@@ -314,6 +320,12 @@ onMounted(() => { if (token.value) void refresh(); });
       <section class="content-grid">
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">EVENT SUMMARY</p><h2>事件明细</h2></div></div><div v-if="summary?.items.length" class="summary-list"><div v-for="item in summary.items" :key="item.eventName" class="summary-row"><div class="summary-name"><strong>{{ item.eventName }}</strong><span>{{ item.uniqueUsers }} 个匿名设备</span></div><strong>{{ item.eventCount }}</strong></div></div><div v-else class="empty">暂无事件数据</div></article>
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RECENT EVENTS</p><h2>最近事件</h2></div><select v-model="selectedEvent" aria-label="按事件名称筛选" @change="refresh"><option value="">全部事件</option><option v-for="item in summary?.items ?? []" :key="item.eventName" :value="item.eventName">{{ item.eventName }}</option></select></div><div class="table-wrap"><table><thead><tr><th>事件</th><th>屏幕</th><th>平台</th><th>发生时间</th></tr></thead><tbody><tr v-for="event in events" :key="event.eventId"><td><strong>{{ event.eventName }}</strong><small>{{ event.analyticsUserId ?? '未标识' }}</small></td><td>{{ event.screenId ?? '-' }}</td><td>{{ event.platform ?? '-' }}</td><td>{{ new Date(event.occurredAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!events.length" class="empty">暂无匹配事件</div></div></article>
+      </section>
+      <section v-if="canReadAnalytics" id="users" class="panel audit-panel users-center">
+        <div class="panel-heading"><div><p class="eyebrow">USER DIRECTORY</p><h2>用户数据管理</h2></div><div class="content-actions"><span class="panel-note">匿名行为目录 · {{ analyticsUsers.length }} 个用户</span><button v-if="canExport" class="button" type="button" @click="downloadUsersCsv">导出用户 CSV</button></div></div>
+        <p class="panel-note user-data-note">当前版本按分析 ID 聚合用户行为，不包含手机号、姓名等个人信息。接入 App 用户表后，这里可扩展账号状态、注册来源和登录设备管理。</p>
+        <div class="content-toolbar user-toolbar"><input v-model="userSearch" placeholder="搜索匿名用户 ID" aria-label="搜索用户" @keyup.enter="refresh" /><button class="button" type="button" @click="refresh">查询</button></div>
+        <div class="table-wrap"><table><thead><tr><th>用户 ID</th><th>用户类型</th><th>事件数</th><th>首次访问</th><th>最近访问</th><th>平台</th></tr></thead><tbody><tr v-for="user in analyticsUsers" :key="user.analyticsUserId"><td><strong>{{ user.analyticsUserId }}</strong></td><td><span :class="['status', user.analyticsUserId.startsWith('anonymous_') ? 'draft' : 'active']">{{ user.analyticsUserId.startsWith('anonymous_') ? '游客' : '已识别' }}</span></td><td>{{ user.eventCount }}</td><td>{{ new Date(user.firstSeen).toLocaleString() }}</td><td>{{ new Date(user.lastSeen).toLocaleString() }}</td><td>{{ user.platform ?? '-' }}</td></tr></tbody></table><div v-if="!analyticsUsers.length" class="empty">暂无用户行为数据</div></div>
       </section>
       <section v-if="canReadAnalytics" id="nutrition" class="panel audit-panel nutrition-center">
         <div class="panel-heading"><div><p class="eyebrow">NUTRITION OPERATIONS</p><h2>饮食管理</h2></div><div class="content-actions"><span class="panel-note">行为数据 · {{ nutrition?.kpis.eventCount ?? 0 }} 条</span><button v-if="canExport" class="button" type="button" @click="downloadNutritionEventsCsv">导出饮食 CSV</button></div></div>

@@ -84,6 +84,8 @@ The current event vocabulary includes community navigation, screen views, body-r
 
 The admin analytics area also exposes a nutrition behavior view. It aggregates anonymous nutrition screen views, food searches, food selections, and meal-record actions, with meal-name distribution and CSV export. This is intentionally behavior analytics only: the current mobile nutrition screens use mock food data and do not yet persist user nutrition records or expose identifiable dietary details in the admin panel.
 
+The user directory currently aggregates analytics identities with first/last seen time, event count, and platform. Anonymous IDs are labeled as guests, and non-anonymous analytics IDs are labeled as identified. It is not an App account database: phone numbers, profile fields, account locking, and device/session management remain reserved for the future mobile authentication module.
+
 ```powershell
 $events = @{ events = @(@{
   eventId = 'evt-local-001'
