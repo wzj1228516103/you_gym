@@ -19,6 +19,11 @@ spring:
       max-file-size: 51MB
       max-request-size: 510MB
 
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
 management:
   endpoints:
     web:

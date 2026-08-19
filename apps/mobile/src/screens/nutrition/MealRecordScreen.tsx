@@ -1,10 +1,13 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronRight, Plus, Utensils } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
 import { AppScreen, Card, PrimaryButton, ScreenHeader, SectionHeader } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
 import { trackEvent } from '../../services/analytics';
+import { saveNutrition } from '../../services/api';
+import { useAuthState } from '../../state/AuthState';
 
 type Props = NativeStackScreenProps<NutritionStackParamList, 'MealRecord'>;
 
@@ -15,6 +18,17 @@ const mealFoods = [
 ];
 
 export function MealRecordScreen({ navigation, route }: Props) {
+  const { token } = useAuthState();
+  const [saving, setSaving] = useState(false);
+  async function complete() {
+    setSaving(true);
+    try {
+      if (token) await saveNutrition(token, { mealName: route.params.mealName, calories: 406, proteinG: 41, carbohydratesG: 44.2, fatG: 8.8, foodCount: mealFoods.length, metadata: { foods: mealFoods.map((food) => food.name) } });
+      trackEvent('nutrition_meal_recorded', { mealName: route.params.mealName, foodCount: mealFoods.length }, { screenId: 'meal_record' });
+      navigation.goBack();
+    } catch (cause) { Alert.alert('保存失败', cause instanceof Error ? cause.message : '请稍后重试'); }
+    finally { setSaving(false); }
+  }
   return (
     <AppScreen contentStyle={styles.content}>
       <ScreenHeader title={route.params.mealName} eyebrow="今日饮食" onBack={navigation.goBack} actions={<Text style={styles.edit}>编辑</Text>} />
@@ -24,7 +38,7 @@ export function MealRecordScreen({ navigation, route }: Props) {
         {mealFoods.map((food) => <View key={food.name} style={styles.foodRow}><View style={styles.foodArt}><Utensils size={19} color={colors.textSecondary} /></View><View style={styles.foodCopy}><Text style={styles.foodName}>{food.name}</Text><Text style={styles.foodMeta}>{food.amount} · {food.meta}</Text></View><View style={styles.foodRight}><Text style={styles.foodKcal}>{food.kcal}</Text><Text style={styles.unit}>kcal</Text></View><ChevronRight size={16} color={colors.textTertiary} /></View>)}
       </View>
       <Card style={styles.totalCard}><Text style={styles.totalLabel}>本餐小计</Text><View style={styles.totalRow}><Metric label="热量" value="406 kcal" accent /><Metric label="蛋白质" value="41.0 g" /><Metric label="碳水" value="44.2 g" /><Metric label="脂肪" value="8.8 g" /></View></Card>
-      <PrimaryButton label="完成记录" icon={Plus} onPress={() => { trackEvent('nutrition_meal_recorded', { mealName: route.params.mealName, foodCount: mealFoods.length }, { screenId: 'meal_record' }); navigation.goBack(); }} style={styles.button} />
+      <PrimaryButton label={saving ? '保存中…' : '完成记录'} disabled={saving} icon={Plus} onPress={() => void complete()} style={styles.button} />
     </AppScreen>
   );
 }

@@ -55,23 +55,6 @@ public class AnalyticsEventRepository {
         return jdbcTemplate.query("SELECT event_id,event_name,event_version,occurred_at,received_at,session_id,analytics_user_id,platform,app_version,build_number,locale,timezone,network_type,screen_id,properties_json FROM analytics_event WHERE occurred_at >= ? AND occurred_at < ? AND event_name LIKE 'nutrition_%' ORDER BY occurred_at DESC LIMIT ?", this::mapRow, Timestamp.from(from), Timestamp.from(to), limit);
     }
 
-    public List<UserAggregate> findUsers(Instant from, Instant to, String search, int limit) {
-        StringBuilder sql = new StringBuilder("SELECT analytics_user_id, COUNT(*) AS event_count, MIN(occurred_at) AS first_seen, MAX(occurred_at) AS last_seen, MAX(platform) AS platform FROM analytics_event WHERE occurred_at >= ? AND occurred_at < ? AND analytics_user_id IS NOT NULL AND analytics_user_id <> ''");
-        var args = new java.util.ArrayList<Object>();
-        args.add(Timestamp.from(from));
-        args.add(Timestamp.from(to));
-        if (search != null && !search.isBlank()) {
-            sql.append(" AND LOWER(analytics_user_id) LIKE ?");
-            args.add("%" + search.toLowerCase(java.util.Locale.ROOT) + "%");
-        }
-        sql.append(" GROUP BY analytics_user_id ORDER BY last_seen DESC LIMIT ?");
-        args.add(limit);
-        return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> new UserAggregate(
-                rs.getString("analytics_user_id"), rs.getLong("event_count"),
-                rs.getTimestamp("first_seen").toInstant(), rs.getTimestamp("last_seen").toInstant(),
-                rs.getString("platform")), args.toArray());
-    }
-
     public List<AnalyticsSummaryRow> summarize(Instant from, Instant to) {
         return jdbcTemplate.query("SELECT event_name, COUNT(*) AS event_count, COUNT(DISTINCT analytics_user_id) AS unique_users FROM analytics_event WHERE occurred_at >= ? AND occurred_at < ? GROUP BY event_name ORDER BY event_count DESC", (rs, rowNum) -> new AnalyticsSummaryRow(rs.getString("event_name"), rs.getLong("event_count"), rs.getLong("unique_users")), Timestamp.from(from), Timestamp.from(to));
     }
@@ -108,7 +91,6 @@ public class AnalyticsEventRepository {
                                     String appVersion, String buildNumber, String locale, String timezone,
                                     String networkType, String screenId, String propertiesJson) {}
     public record AnalyticsSummaryRow(String eventName, long eventCount, long uniqueUsers) {}
-    public record UserAggregate(String analyticsUserId, long eventCount, Instant firstSeen, Instant lastSeen, String platform) {}
     public record DashboardEventRow(String eventName, Instant occurredAt, String sessionId,
                                     String analyticsUserId, String platform, String propertiesJson) {}
 }

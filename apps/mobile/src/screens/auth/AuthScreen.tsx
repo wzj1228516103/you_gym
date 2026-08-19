@@ -5,6 +5,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, PrimaryButton, SegmentedControl } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { RootStackParamList } from '../../types';
+import { sendSmsCode } from '../../services/api';
+import { useAuthState } from '../../state/AuthState';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
@@ -12,6 +14,23 @@ export function AuthScreen({ navigation }: Props) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [phone, setPhone] = useState('138 6666 8888');
   const canSubmit = phone.replace(/\D/g, '').length === 11;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { continueAsGuest } = useAuthState();
+
+  async function requestCode() {
+    setLoading(true);
+    setError('');
+    try {
+      const purpose = mode === 'login' ? 'LOGIN' : 'REGISTER';
+      const result = await sendSmsCode(`+86${phone.replace(/\D/g, '')}`, purpose);
+      navigation.navigate('Otp', { phone, purpose, mockMode: result.mockMode });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '验证码发送失败');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <AppScreen keyboard contentStyle={styles.content}>
@@ -41,7 +60,8 @@ export function AuthScreen({ navigation }: Props) {
         />
       </View>
 
-      <PrimaryButton label="获取验证码" disabled={!canSubmit} onPress={() => navigation.navigate('Otp', { phone })} />
+      <PrimaryButton label={loading ? '发送中…' : '获取验证码'} disabled={!canSubmit || loading} onPress={() => void requestCode()} />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.agreementRow}>
         <ShieldCheck size={15} color={colors.primary} />
@@ -53,7 +73,7 @@ export function AuthScreen({ navigation }: Props) {
         <Text style={styles.previewTitle}>先看看产品</Text>
         <View style={styles.previewLine} />
       </View>
-      <Pressable accessibilityRole="button" onPress={() => navigation.replace('Main')} style={styles.previewButton}>
+      <Pressable accessibilityRole="button" onPress={() => { continueAsGuest(); navigation.replace('Main'); }} style={styles.previewButton}>
         <MessageCircleMore size={22} color={colors.primary} />
         <Text style={styles.previewButtonText}>游客预览</Text>
       </Pressable>
@@ -79,4 +99,5 @@ const styles = StyleSheet.create({
   previewTitle: { ...typography.caption, color: colors.textTertiary },
   previewButton: { alignSelf: 'center', minWidth: 112, height: 48, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.x2 },
   previewButtonText: { ...typography.support, color: colors.primary, fontWeight: '700' },
+  error: { ...typography.caption, color: colors.muscle, textAlign: 'center' },
 });

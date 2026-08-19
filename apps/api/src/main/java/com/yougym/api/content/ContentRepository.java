@@ -30,6 +30,10 @@ public class ContentRepository {
         return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> map(rs), args.toArray());
     }
 
+    public List<ContentItem> findPublishedByAnatomyNode(String contentType, String anatomyNodeId, int limit) {
+        return jdbcTemplate.query("SELECT id,title,content_type,status,summary,body,media_url,media_assets_json,anatomy_node_id,created_by,updated_by,created_at,updated_at,published_at FROM content_item WHERE status = 'PUBLISHED' AND content_type = ? AND anatomy_node_id = ? ORDER BY updated_at DESC LIMIT ?", (rs, rowNum) -> map(rs), contentType, anatomyNodeId, limit);
+    }
+
     public ContentItem findById(String id) {
         List<ContentItem> rows = jdbcTemplate.query("SELECT id,title,content_type,status,summary,body,media_url,media_assets_json,anatomy_node_id,created_by,updated_by,created_at,updated_at,published_at FROM content_item WHERE id = ?", (rs, rowNum) -> map(rs), id);
         return rows.isEmpty() ? null : rows.get(0);

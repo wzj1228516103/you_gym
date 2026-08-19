@@ -1,13 +1,25 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Check, Dumbbell, Flame, Trophy } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
 import { AppScreen, Card, PrimaryButton, SecondaryButton } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { PlanStackParamList } from '../../types';
+import { saveWorkout } from '../../services/api';
+import { useAuthState } from '../../state/AuthState';
+import { trackEvent } from '../../services/analytics';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'WorkoutSummary'>;
 
 export function WorkoutSummaryScreen({ navigation }: Props) {
+  const { token } = useAuthState();
+  const saved = useRef(false);
+  useEffect(() => {
+    if (saved.current) return;
+    saved.current = true;
+    trackEvent('workout_completed', { durationSeconds: 2732, totalSets: 16, totalVolume: 6240 }, { screenId: 'workout_summary' });
+    if (token) void saveWorkout(token, { title: '今日训练', durationSeconds: 2732, totalSets: 16, totalVolume: 6240, calories: 620, metadata: { muscles: ['胸大肌', '三角肌前束', '肱三头肌'] } }).catch((cause) => Alert.alert('训练记录保存失败', cause instanceof Error ? cause.message : '请稍后重试'));
+  }, [token]);
   return (
     <AppScreen contentStyle={styles.content}>
       <View style={styles.trophy}><Trophy size={52} color={colors.textInverse} strokeWidth={2.2} /></View>

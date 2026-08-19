@@ -1,24 +1,33 @@
 import { useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AlertTriangle, Bookmark, Check, Dumbbell, Play, ShieldCheck, Star } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
-import { exercises } from '../../data/mockData';
 import { useAppState } from '../../state/AppState';
+import { serverAnatomyId } from '../../data/anatomyMerge';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
+import { ExerciseContent, fetchPublishedExerciseContent } from '../../services/api';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseDetail'>;
 
 export function ExerciseDetailScreen({ navigation, route }: Props) {
+  const { addExercise, todayExerciseIds, exercises } = useAppState();
   const exercise = exercises.find((item) => item.id === route.params.exerciseId) ?? exercises[0];
-  const { addExercise, todayExerciseIds } = useAppState();
   const [saved, setSaved] = useState(false);
+  const [content, setContent] = useState<ExerciseContent | null>(null);
   const added = todayExerciseIds.includes(exercise.id);
 
   useEffect(() => {
     trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: exercise.name }, { screenId: 'exercise_detail' });
+    let active = true;
+    void fetchPublishedExerciseContent(exercise.name, route.params.nodeId ? serverAnatomyId(route.params.nodeId) : undefined).then(({ items }) => {
+      if (!active) return;
+      const match = route.params.nodeId ? items[0] : items.find((item) => item.title === exercise.name);
+      setContent(match ?? null);
+    }).catch(() => { if (active) setContent(null); });
+    return () => { active = false; };
   }, [exercise.id, exercise.name]);
 
   return (
@@ -32,9 +41,9 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
       <View style={styles.metaRow}><Tag>{exercise.target}</Tag><Tag>{exercise.equipment}</Tag><Tag>{exercise.location}</Tag></View>
 
       <View style={styles.media}>
-        <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />
+        {content?.mediaUrl ? <Image source={{ uri: content.mediaUrl }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />}
         <View style={styles.playButton}><Play size={24} color={colors.text} fill={colors.text} /></View>
-        <Text style={styles.mediaNote}>动作媒体待授权 · 当前显示训练占位</Text>
+        <Text style={styles.mediaNote}>{content ? `${content.contentType === 'VIDEO' ? '视频' : content.contentType === 'GIF' ? 'GIF' : content.contentType === 'MODEL_3D' ? '3D 模型' : '训练内容'} · 已发布` : '动作媒体待授权 · 当前显示训练占位'}</Text>
       </View>
 
       <View style={styles.ratingRow}><Star size={16} color={colors.warning} fill={colors.warning} /><Text style={styles.rating}>{exercise.rating}</Text><Text style={styles.ratingMeta}>专业内容已审核</Text></View>
@@ -47,6 +56,8 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
 
       <SectionHeader title="标准动作步骤" />
       <Card style={styles.listCard}>{exercise.steps.map((step, index) => <View key={step} style={styles.stepRow}><View style={styles.stepIndex}><Text style={styles.stepIndexText}>{index + 1}</Text></View><Text style={styles.stepText}>{step}</Text></View>)}</Card>
+
+      {content?.summary || content?.body ? <><SectionHeader title="教练补充" /><Card style={styles.contentCard}>{content.summary ? <Text style={styles.contentSummary}>{content.summary}</Text> : null}{content.body ? <Text style={styles.contentBody}>{content.body}</Text> : null}</Card></> : null}
 
       <SectionHeader title="常见错误" />
       <Card style={styles.listCard}>{exercise.mistakes.map((mistake) => <View key={mistake} style={styles.bulletRow}><AlertTriangle size={17} color={colors.warning} /><Text style={styles.bulletText}>{mistake}</Text></View>)}</Card>
@@ -70,6 +81,7 @@ const styles = StyleSheet.create({
   english: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.x1 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2, marginTop: spacing.x3 },
   media: { height: 230, borderRadius: radius.card, backgroundColor: '#0D0E11', borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginTop: spacing.x5, overflow: 'hidden' },
+  mediaImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   playButton: { position: 'absolute', width: 56, height: 56, borderRadius: radius.pill, backgroundColor: 'rgba(0,0,0,0.72)', borderWidth: 1, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   mediaNote: { ...typography.caption, color: colors.textTertiary, position: 'absolute', left: spacing.x3, bottom: spacing.x3 },
   ratingRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
@@ -80,6 +92,9 @@ const styles = StyleSheet.create({
   parameterLabel: { ...typography.caption, color: colors.textSecondary },
   parameterValue: { ...typography.cardTitle, color: colors.text, marginTop: spacing.x1 },
   listCard: { gap: spacing.x3 },
+  contentCard: { gap: spacing.x3 },
+  contentSummary: { ...typography.listTitle, color: colors.text },
+  contentBody: { ...typography.body, color: colors.textSecondary },
   stepRow: { flexDirection: 'row', gap: spacing.x3, alignItems: 'flex-start' },
   stepIndex: { width: 24, height: 24, borderRadius: radius.pill, backgroundColor: colors.control, alignItems: 'center', justifyContent: 'center' },
   stepIndexText: { ...typography.caption, color: colors.primary, fontWeight: '700' },

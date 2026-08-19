@@ -78,38 +78,6 @@ public class AnalyticsAdminController {
         return nutritionDashboardService.dashboard(range.from(), range.to(), zoneId);
     }
 
-    @GetMapping("/users")
-    public Map<String, Object> users(@RequestParam(required = false) Instant from,
-                                     @RequestParam(required = false) Instant to,
-                                     @RequestParam(required = false) String search,
-                                     @RequestParam(defaultValue = "200") int limit,
-                                     HttpServletRequest request) {
-        var principal = accessService.authorize(request, AdminPermission.ANALYTICS_READ);
-        Range range = Range.of(from, to);
-        int safeLimit = Math.max(1, Math.min(limit, 1000));
-        auditLogService.record(principal, "ANALYTICS_USERS_VIEWED", "analytics_user", null, request,
-                search == null ? Map.of() : Map.of("search", search));
-        List<AnalyticsEventRepository.UserAggregate> items = repository.findUsers(range.from(), range.to(), search, safeLimit);
-        return Map.of("from", range.from(), "to", range.to(), "items", items);
-    }
-
-    @GetMapping(value = "/users.csv", produces = "text/csv")
-    public ResponseEntity<byte[]> usersCsv(@RequestParam(required = false) Instant from,
-                                           @RequestParam(required = false) Instant to,
-                                           @RequestParam(required = false) String search,
-                                           @RequestParam(defaultValue = "10000") int limit,
-                                           HttpServletRequest request) {
-        var principal = accessService.authorize(request, AdminPermission.ANALYTICS_EXPORT);
-        Range range = Range.of(from, to);
-        List<AnalyticsEventRepository.UserAggregate> items = repository.findUsers(range.from(), range.to(), search, Math.max(1, Math.min(limit, 10000)));
-        StringBuilder csv = new StringBuilder("analyticsUserId,userType,eventCount,firstSeen,lastSeen,platform\n");
-        for (var item : items) {
-            csv.append(String.join(",", quote(item.analyticsUserId()), quote(item.analyticsUserId().startsWith("anonymous_") ? "GUEST" : "IDENTIFIED"), quote(item.eventCount()), quote(item.firstSeen()), quote(item.lastSeen()), quote(item.platform()))).append('\n');
-        }
-        auditLogService.record(principal, "ANALYTICS_USERS_EXPORTED", "analytics_user", null, request, Map.of("count", items.size()));
-        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=analytics-users.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(StandardCharsets.UTF_8));
-    }
-
     @GetMapping(value = "/nutrition.csv", produces = "text/csv")
     public ResponseEntity<byte[]> nutritionCsv(@RequestParam(required = false) Instant from,
                                                @RequestParam(required = false) Instant to,

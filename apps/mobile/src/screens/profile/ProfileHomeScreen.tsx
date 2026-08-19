@@ -4,19 +4,21 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, Metric, ProgressBar, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { ProfileStackParamList } from '../../types';
+import { useAuthState } from '../../state/AuthState';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileHome'>;
 
 export function ProfileHomeScreen({ navigation }: Props) {
+  const { user, guest } = useAuthState();
   return (
     <AppScreen>
       <ScreenHeader title="个人" actions={<IconButton icon={BellRing} label="通知中心" size={42} onPress={() => navigation.navigate('Notifications')} />} />
       <View style={styles.profileHeader}>
         <View style={styles.avatar}><UserRound size={34} color={colors.primary} /></View>
-        <View style={styles.profileCopy}><View style={styles.nameRow}><Text style={styles.name}>健身爱好者</Text><Tag tone="primary">Lv.28</Tag></View><Text style={styles.streak}>连续训练：23 天</Text></View>
+        <View style={styles.profileCopy}><View style={styles.nameRow}><Text style={styles.name}>{guest ? '游客' : user?.nickname ?? '健身爱好者'}</Text><Tag tone="primary">{guest ? '访客' : '已登录'}</Tag></View><Text style={styles.streak}>{user?.goal ? `目标：${user.goal}` : '完善资料后获得个性化建议'}</Text></View>
         <ChevronRight size={18} color={colors.textTertiary} />
       </View>
-      <Card style={styles.metricCard}><Metric label="体重" value="72.5 kg" /><View style={styles.metricDivider} /><Metric label="体脂率" value="16.3%" /><View style={styles.metricDivider} /><Metric label="累计训练" value="86 次" /></Card>
+      <Card style={styles.metricCard}><Metric label="体重" value={user?.weightKg ? `${user.weightKg} kg` : '-'} /><View style={styles.metricDivider} /><Metric label="体脂率" value={user?.bodyFatPct ? `${user.bodyFatPct}%` : '-'} /><View style={styles.metricDivider} /><Metric label="账号" value={guest ? '游客' : '正常'} /></Card>
 
       <Card style={styles.planCard}>
         <View style={styles.planTop}><View><Text style={styles.cardEyebrow}>当前计划</Text><Text style={styles.planTitle}>推拉腿三分化</Text></View><Dumbbell size={30} color={colors.muscle} /></View>

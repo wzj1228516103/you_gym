@@ -4,7 +4,6 @@ import { Animated, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Te
 import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { ChevronLeft, ChevronRight, Layers3, LocateFixed, RotateCcw, Search, Settings2, X } from 'lucide-react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SegmentedControl, Tag } from '../../components/ui';
-import { anatomyNodes, regions } from '../../data/mockData';
 import { useAppState } from '../../state/AppState';
 import { trackEvent } from '../../services/analytics';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -87,7 +86,7 @@ const moduleAssets: Record<Gender, Record<string, number>> = { male: maleModuleA
 const hitAreaData = require('../../data/muscle-hit-areas.json') as HitAreaData;
 
 export function AnatomyHomeScreen({ navigation }: Props) {
-  const { selectedNode, selectedNodeId, setSelectedNodeId } = useAppState();
+  const { anatomyNodes, anatomySynced, selectedNode, selectedNodeId, setSelectedNodeId } = useAppState();
   const [gender, setGender] = useState<Gender>('male');
   const [panel, setPanel] = useState<'regions' | 'locate' | 'settings' | null>(null);
   const [regionDrilldown, setRegionDrilldown] = useState<string | null>(null);
@@ -99,6 +98,7 @@ export function AnatomyHomeScreen({ navigation }: Props) {
   const regionNodes = regionDrilldown
     ? anatomyNodes.filter((node) => regionDrilldown === '全身' || node.region === regionDrilldown)
     : [];
+  const regions = ['全身', ...Array.from(new Set(anatomyNodes.map((node) => node.region)))];
 
   useEffect(() => {
     focus.stopAnimation();
@@ -196,14 +196,15 @@ export function AnatomyHomeScreen({ navigation }: Props) {
           <View style={styles.selectionCopy}>
             <View style={styles.selectionTitleRow}>
               <View style={[styles.muscleDot, { backgroundColor: selectedNode.color ?? colors.muscle, shadowColor: selectedNode.color ?? colors.muscle }]} />
-              <Text style={styles.selectionTitle}>{selectedNode.muscle}（{selectedNode.part}）</Text>
+              <Text style={styles.selectionTitle}>{selectedNode.displayName ?? `${selectedNode.muscle}（${selectedNode.part}）`}</Text>
               <Tag tone={hasExercises ? 'muscle' : 'neutral'}>{hasExercises ? '已收录动作' : '待补动作'}</Tag>
             </View>
             <Text style={styles.selectionEnglish}>{selectedNode.nameEn}</Text>
           </View>
           <Text style={styles.sideLabel}>{selectedNode.side === 'front' ? '正面' : selectedNode.side === 'back' ? '背面' : '正面 / 背面'}</Text>
         </View>
-        <Text style={styles.path}>{selectedNode.region} → {selectedNode.group} → {selectedNode.muscle} → {selectedNode.part}</Text>
+        <Text style={styles.path}>{selectedNode.region} → {selectedNode.group} → {selectedNode.displayName ?? `${selectedNode.muscle} · ${selectedNode.part}`}</Text>
+        <Text style={styles.syncState}>{anatomySynced ? '肌群目录已与服务端同步' : '当前使用本地肌群目录'}</Text>
         <View style={styles.functionRow}>
           {selectedNode.functions.map((item) => <Tag key={item}>{item}</Tag>)}
         </View>
@@ -238,7 +239,7 @@ export function AnatomyHomeScreen({ navigation }: Props) {
                 >
                   <View style={[styles.muscleOptionDot, { backgroundColor: node.color ?? colors.muscle }]} />
                   <View style={styles.muscleOptionCopy}>
-                    <Text style={[styles.muscleOptionName, selected && styles.muscleOptionNameActive]}>{node.muscle} · {node.part}</Text>
+                    <Text style={[styles.muscleOptionName, selected && styles.muscleOptionNameActive]}>{node.displayName ?? `${node.muscle} · ${node.part}`}</Text>
                     <Text style={styles.muscleOptionMeta}>{node.nameEn} · {node.side === 'front' ? '正面' : node.side === 'back' ? '背面' : '正面 / 背面'}</Text>
                   </View>
                   <ChevronRight color={selected ? colors.primary : colors.textTertiary} size={18} />
@@ -272,7 +273,7 @@ export function AnatomyHomeScreen({ navigation }: Props) {
 
       <Panel visible={panel === 'locate'} title="快速定位" onClose={() => setPanel(null)}>
         <Text style={styles.panelHint}>按训练目标定位常用肌群</Text>
-        <View style={styles.regionGrid}>{anatomyNodes.map((node) => <Pressable key={node.id} accessibilityRole="button" accessibilityLabel={`定位${node.muscle}${node.part}`} onPress={() => chooseNode(node.id)} style={styles.locateOption}><Text style={styles.locateTitle}>{node.muscle}</Text><Text style={styles.locateMeta}>{node.region} · {node.part}</Text></Pressable>)}</View>
+        <View style={styles.regionGrid}>{anatomyNodes.map((node) => <Pressable key={node.id} accessibilityRole="button" accessibilityLabel={`定位${node.muscle}${node.part}`} onPress={() => chooseNode(node.id)} style={styles.locateOption}><Text style={styles.locateTitle}>{node.displayName ?? node.muscle}</Text><Text style={styles.locateMeta}>{node.region} · {node.part}</Text></Pressable>)}</View>
       </Panel>
 
       <Panel visible={panel === 'settings'} title="人体设置" onClose={() => setPanel(null)}>
@@ -326,6 +327,7 @@ const styles = StyleSheet.create({
   selectionEnglish: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.x1, marginLeft: 17 },
   sideLabel: { ...typography.caption, color: colors.primary },
   path: { ...typography.caption, color: colors.textSecondary },
+  syncState: { ...typography.eyebrow, color: colors.textTertiary },
   functionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.72)' },
   panel: { width: '100%', maxWidth: 430, maxHeight: '82%', alignSelf: 'center', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.sheet, padding: spacing.x5, paddingBottom: 40, gap: spacing.x4 },

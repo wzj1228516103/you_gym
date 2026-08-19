@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import {
+  Activity, Apple, BarChart3, BookOpen, ChevronRight, ClipboardCheck,
+  Dumbbell, FileClock, LayoutDashboard, RefreshCw, Settings, Upload,
+  UserRound, UsersRound,
+} from '@lucide/vue';
 import AdminAuthView from './AdminAuthView.vue';
 import DashboardChart from './components/DashboardChart.vue';
 import {
   createAdminAccount, createContent, downloadAnalyticsCsv, downloadAnalyticsUsersCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchAnalyticsUsers, fetchContent, fetchNutritionDashboard,
   deleteContent, deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
-  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard,
+  fetchAppNutrition, fetchAppUsers, fetchAppWorkouts,
+  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard, type AppUser, type WorkoutRecord, type NutritionRecord,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
 
@@ -29,6 +35,9 @@ const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
 const nutrition = ref<NutritionDashboard | null>(null);
 const analyticsUsers = ref<AnalyticsUser[]>([]);
+const appUsers = ref<AppUser[]>([]);
+const appWorkouts = ref<WorkoutRecord[]>([]);
+const appNutrition = ref<NutritionRecord[]>([]);
 const userSearch = ref('');
 const contentStatusFilter = ref<ContentStatus | ''>('');
 const contentTypeFilter = ref<ContentType | ''>('');
@@ -47,6 +56,31 @@ const contentUploadInput = ref<HTMLInputElement | null>(null);
 const contentForm = ref({ title: '', contentType: 'ARTICLE' as ContentType, summary: '', body: '', mediaUrl: '', mediaAssets: [] as ContentMediaAsset[], anatomyNodeId: '' });
 const accountForm = ref({ username: '', displayName: '', password: '', role: 'EMPLOYEE' as AdminRole });
 const accountLoading = ref(false);
+
+type AdminModule = 'dashboard' | 'analytics' | 'users' | 'nutrition' | 'content' | 'anatomy' | 'review' | 'system' | 'audit';
+const moduleFromHash = (): AdminModule => {
+  const candidate = window.location.hash.replace(/^#\/?/, '') as AdminModule;
+  return ['dashboard', 'analytics', 'users', 'nutrition', 'content', 'anatomy', 'review', 'system', 'audit'].includes(candidate) ? candidate : 'dashboard';
+};
+const activeModule = ref<AdminModule>(moduleFromHash());
+const moduleMeta: Record<AdminModule, { eyebrow: string; title: string; description: string }> = {
+  dashboard: { eyebrow: 'OPERATIONS OVERVIEW', title: '运营仪表盘', description: '聚合关键指标和业务趋势' },
+  analytics: { eyebrow: 'BEHAVIOR ANALYTICS', title: '数据分析', description: '查看事件汇总和最新埋点明细' },
+  users: { eyebrow: 'USER OPERATIONS', title: '用户管理', description: '管理 App 用户和用户行为数据' },
+  nutrition: { eyebrow: 'NUTRITION OPERATIONS', title: '饮食管理', description: '查看饮食行为和餐次记录数据' },
+  content: { eyebrow: 'CONTENT OPERATIONS', title: '内容中心', description: '管理文章、视频、动图和 3D 资源' },
+  anatomy: { eyebrow: 'ANATOMY CATALOG', title: '解剖中心', description: '查看身体区域和肌群分级目录' },
+  review: { eyebrow: 'CONTENT REVIEW', title: '审核中心', description: '内容审核与举报处置工作台' },
+  system: { eyebrow: 'SYSTEM ACCESS', title: '系统管理', description: '管理后台账号、角色和登录会话' },
+  audit: { eyebrow: 'AUDIT TRAIL', title: '审计日志', description: '追踪后台关键管理操作' },
+};
+const currentModuleMeta = computed(() => moduleMeta[activeModule.value]);
+function navigateTo(module: AdminModule) {
+  window.location.hash = `/${module}`;
+  activeModule.value = module;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function syncModuleFromHash() { activeModule.value = moduleFromHash(); }
 
 const totalEvents = computed(() => dashboard.value?.kpis.eventCount ?? 0);
 const totalUsers = computed(() => dashboard.value?.kpis.uniqueDevices ?? 0);
@@ -231,7 +265,7 @@ async function refresh() {
     role.value = session.role;
     permissions.value = session.permissions;
     const { from, to } = rangeBounds();
-    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextNutrition, nextUsers] = await Promise.all([
+    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextNutrition, nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition] = await Promise.all([
       fetchAnalyticsDashboard(token.value, from, to),
       fetchAnalyticsSummary(token.value, from, to),
       fetchAnalyticsEvents(token.value, selectedEvent.value || undefined),
@@ -242,6 +276,9 @@ async function refresh() {
       session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
       session.permissions.includes('ANALYTICS_READ') ? fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined) : Promise.resolve({ items: [] as AnalyticsUser[] }),
+      session.permissions.includes('ANALYTICS_READ') ? fetchAppUsers(token.value) : Promise.resolve({ items: [] as AppUser[] }),
+      session.permissions.includes('ANALYTICS_READ') ? fetchAppWorkouts(token.value) : Promise.resolve({ items: [] as WorkoutRecord[] }),
+      session.permissions.includes('ANALYTICS_READ') ? fetchAppNutrition(token.value) : Promise.resolve({ items: [] as NutritionRecord[] }),
     ]);
     dashboard.value = nextDashboard;
     summary.value = nextSummary;
@@ -253,10 +290,13 @@ async function refresh() {
     contentItems.value = nextContent.items;
     nutrition.value = nextNutrition;
     analyticsUsers.value = nextUsers.items;
+    appUsers.value = nextAppUsers.items;
+    appWorkouts.value = nextAppWorkouts.items;
+    appNutrition.value = nextAppNutrition.items;
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = [];
+    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = [];
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { loading.value = false; }
 }
@@ -271,11 +311,16 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = []; } }
+async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
-onMounted(() => { if (token.value) void refresh(); });
+onMounted(() => {
+  window.addEventListener('hashchange', syncModuleFromHash);
+  if (!window.location.hash) window.history.replaceState(null, '', '#/dashboard');
+  if (token.value) void refresh();
+});
+onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHash));
 </script>
 
 <template>
@@ -284,50 +329,64 @@ onMounted(() => { if (token.value) void refresh(); });
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">YG</span><span>YOU GYM</span></div>
       <nav class="nav" aria-label="后台导航">
-        <a class="nav-item active" href="#analytics">埋点仪表盘</a>
-        <a v-if="canReadAnalytics" class="nav-item" href="#users">用户管理</a>
-        <a v-if="canReadAnalytics" class="nav-item" href="#nutrition">饮食管理</a>
-        <a v-if="canReadContent" class="nav-item" href="#content">内容中心</a>
-        <a v-if="role !== 'EMPLOYEE'" class="nav-item" href="#anatomy">解剖中心</a>
-        <a v-if="role !== 'EMPLOYEE'" class="nav-item" href="#review">审核中心 <span>预留</span></a>
-        <a v-if="role === 'SUPER_ADMIN'" class="nav-item" href="#system">系统管理</a>
-        <a v-if="canReadAudit" class="nav-item" href="#audit">审计日志</a>
+        <button :class="['nav-item', { active: activeModule === 'dashboard' }]" type="button" @click="navigateTo('dashboard')"><LayoutDashboard :size="17" /><span class="nav-label">仪表盘</span></button>
+        <button v-if="canReadAnalytics" :class="['nav-item', { active: activeModule === 'analytics' }]" type="button" @click="navigateTo('analytics')"><BarChart3 :size="17" /><span class="nav-label">数据分析</span></button>
+        <button v-if="canReadAnalytics" :class="['nav-item', { active: activeModule === 'users' }]" type="button" @click="navigateTo('users')"><UsersRound :size="17" /><span class="nav-label">用户管理</span></button>
+        <button v-if="canReadAnalytics" :class="['nav-item', { active: activeModule === 'nutrition' }]" type="button" @click="navigateTo('nutrition')"><Apple :size="17" /><span class="nav-label">饮食管理</span></button>
+        <button v-if="canReadContent" :class="['nav-item', { active: activeModule === 'content' }]" type="button" @click="navigateTo('content')"><BookOpen :size="17" /><span class="nav-label">内容中心</span></button>
+        <button v-if="role !== 'EMPLOYEE'" :class="['nav-item', { active: activeModule === 'anatomy' }]" type="button" @click="navigateTo('anatomy')"><Dumbbell :size="17" /><span class="nav-label">解剖中心</span></button>
+        <button v-if="role !== 'EMPLOYEE'" :class="['nav-item', { active: activeModule === 'review' }]" type="button" @click="navigateTo('review')"><ClipboardCheck :size="17" /><span class="nav-label">审核中心</span><span class="nav-badge">预留</span></button>
+        <button v-if="role === 'SUPER_ADMIN'" :class="['nav-item', { active: activeModule === 'system' }]" type="button" @click="navigateTo('system')"><Settings :size="17" /><span class="nav-label">系统管理</span></button>
+        <button v-if="canReadAudit" :class="['nav-item', { active: activeModule === 'audit' }]" type="button" @click="navigateTo('audit')"><FileClock :size="17" /><span class="nav-label">审计日志</span></button>
       </nav>
       <div class="sidebar-footer">本地开发环境<br /><small>RBAC 权限已启用</small></div>
     </aside>
-    <main class="main" id="analytics">
-      <header class="topbar"><div><p class="eyebrow">OPERATIONS</p><h1>埋点仪表盘</h1></div><div class="header-meta"><span class="role-badge">{{ roleLabel }}</span><div class="environment">LOCAL</div></div></header>
-      <div class="toolbar" aria-label="数据连接">
-        <button class="button primary" type="button" :disabled="loading" @click="refresh">{{ loading ? '加载中…' : '刷新数据' }}</button>
-        <label class="range-control">时间范围<select v-model.number="rangeDays" aria-label="选择数据时间范围" @change="refresh"><option :value="7">近 7 天</option><option :value="30">近 30 天</option><option :value="90">近 90 天</option></select></label>
-        <button v-if="canExport" class="button" type="button" :disabled="!summary" @click="downloadCsv">导出 CSV</button>
-        <button class="button" type="button" @click="logout">退出会话</button>
+    <main class="main">
+      <header class="topbar">
+        <div><p class="eyebrow">{{ currentModuleMeta.eyebrow }}</p><h1>{{ currentModuleMeta.title }}</h1><p class="page-description">{{ currentModuleMeta.description }}</p></div>
+        <div class="header-meta"><span class="role-badge">{{ roleLabel }}</span><div class="environment">LOCAL</div></div>
+      </header>
+      <div class="toolbar module-toolbar" aria-label="页面操作">
+        <button class="button primary icon-text-button" type="button" :disabled="loading" @click="refresh"><RefreshCw :size="15" :class="{ spinning: loading }" />{{ loading ? '加载中…' : '刷新数据' }}</button>
+        <label v-if="['dashboard', 'analytics', 'nutrition'].includes(activeModule)" class="range-control">时间范围<select v-model.number="rangeDays" aria-label="选择数据时间范围" @change="refresh"><option :value="7">近 7 天</option><option :value="30">近 30 天</option><option :value="90">近 90 天</option></select></label>
+        <button v-if="activeModule === 'analytics' && canExport" class="button" type="button" :disabled="!summary" @click="downloadCsv">导出 CSV</button>
+        <button class="button toolbar-logout" type="button" @click="logout">退出会话</button>
       </div>
       <p v-if="error" class="alert" role="alert">{{ error }}</p><p v-else-if="lastUpdated" class="updated">最近更新：{{ lastUpdated }}</p>
-      <section class="stats" aria-label="汇总指标">
-        <article class="stat"><span>事件总量</span><strong>{{ totalEvents }}</strong><small>当前时间窗口内</small></article>
-        <article class="stat"><span>匿名设备</span><strong>{{ totalUsers }}</strong><small>按匿名 ID 去重</small></article>
-        <article class="stat"><span>会话数</span><strong>{{ totalSessions }}</strong><small>按 session ID 去重</small></article>
-        <article class="stat"><span>上传失败率</span><strong>{{ ((dashboard?.kpis.uploadFailureRate ?? 0) * 100).toFixed(1) }}%</strong><small>{{ dashboard?.kpis.uploadFailureCount ?? 0 }} 次失败</small></article>
+      <section v-if="activeModule === 'dashboard'" class="stats" aria-label="汇总指标">
+        <article class="stat metric-stat"><span class="metric-icon lime"><Activity :size="20" /></span><div><span>事件总量</span><strong>{{ totalEvents }}</strong><small>当前时间窗口内</small></div></article>
+        <article class="stat metric-stat"><span class="metric-icon cyan"><UserRound :size="20" /></span><div><span>匿名设备</span><strong>{{ totalUsers }}</strong><small>按匿名 ID 去重</small></div></article>
+        <article class="stat metric-stat"><span class="metric-icon blue"><UsersRound :size="20" /></span><div><span>会话数</span><strong>{{ totalSessions }}</strong><small>按 session ID 去重</small></div></article>
+        <article class="stat metric-stat"><span class="metric-icon amber"><Upload :size="20" /></span><div><span>上传失败率</span><strong>{{ ((dashboard?.kpis.uploadFailureRate ?? 0) * 100).toFixed(1) }}%</strong><small>{{ dashboard?.kpis.uploadFailureCount ?? 0 }} 次失败</small></div></article>
       </section>
-      <section class="dashboard-grid">
+      <section v-if="activeModule === 'dashboard'" class="dashboard-grid">
         <article class="panel chart-panel chart-wide"><div class="panel-heading"><div><p class="eyebrow">DAILY TREND</p><h2>每日趋势</h2></div><span class="panel-note">事件与匿名设备</span></div><DashboardChart :option="trendOption" :empty="!dashboard?.trend.length" /></article>
         <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">EVENT RANKING</p><h2>事件类型排行</h2></div><span class="panel-note">{{ eventTypeCount }} 类</span></div><DashboardChart :option="eventOption" :empty="!dashboard?.eventDistribution.length" /></article>
         <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">ANATOMY RANKING</p><h2>热门解剖区域</h2></div></div><DashboardChart :option="anatomyOption" :empty="!dashboard?.anatomyRanking.length" /></article>
         <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">ANATOMY FUNNEL</p><h2>解剖行为漏斗</h2></div><span class="panel-note">训练事件接入后自动增长</span></div><DashboardChart :option="funnelOption" :empty="!dashboard?.funnel.some((item) => item.eventCount)" /></article>
         <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">PLATFORM MIX</p><h2>平台分布</h2></div></div><DashboardChart :option="platformOption" :empty="!dashboard?.platformDistribution.length" /></article>
       </section>
-      <section class="content-grid">
+      <section v-if="activeModule === 'dashboard'" class="quick-access" aria-label="快捷入口">
+        <button v-if="canReadAnalytics" type="button" @click="navigateTo('users')"><span class="quick-icon"><UsersRound :size="20" /></span><span><strong>用户管理</strong><small>{{ appUsers.length }} 个注册账户</small></span><ChevronRight :size="17" /></button>
+        <button v-if="canReadContent" type="button" @click="navigateTo('content')"><span class="quick-icon"><BookOpen :size="20" /></span><span><strong>内容中心</strong><small>{{ contentItems.length }} 条内容</small></span><ChevronRight :size="17" /></button>
+        <button v-if="canReadAnalytics" type="button" @click="navigateTo('nutrition')"><span class="quick-icon"><Apple :size="20" /></span><span><strong>饮食管理</strong><small>{{ appNutrition.length }} 条饮食记录</small></span><ChevronRight :size="17" /></button>
+      </section>
+      <section v-if="activeModule === 'analytics'" class="content-grid module-content-grid">
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">EVENT SUMMARY</p><h2>事件明细</h2></div></div><div v-if="summary?.items.length" class="summary-list"><div v-for="item in summary.items" :key="item.eventName" class="summary-row"><div class="summary-name"><strong>{{ item.eventName }}</strong><span>{{ item.uniqueUsers }} 个匿名设备</span></div><strong>{{ item.eventCount }}</strong></div></div><div v-else class="empty">暂无事件数据</div></article>
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RECENT EVENTS</p><h2>最近事件</h2></div><select v-model="selectedEvent" aria-label="按事件名称筛选" @change="refresh"><option value="">全部事件</option><option v-for="item in summary?.items ?? []" :key="item.eventName" :value="item.eventName">{{ item.eventName }}</option></select></div><div class="table-wrap"><table><thead><tr><th>事件</th><th>屏幕</th><th>平台</th><th>发生时间</th></tr></thead><tbody><tr v-for="event in events" :key="event.eventId"><td><strong>{{ event.eventName }}</strong><small>{{ event.analyticsUserId ?? '未标识' }}</small></td><td>{{ event.screenId ?? '-' }}</td><td>{{ event.platform ?? '-' }}</td><td>{{ new Date(event.occurredAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!events.length" class="empty">暂无匹配事件</div></div></article>
       </section>
-      <section v-if="canReadAnalytics" id="users" class="panel audit-panel users-center">
+      <section v-if="activeModule === 'users' && canReadAnalytics" class="panel audit-panel users-center module-panel">
         <div class="panel-heading"><div><p class="eyebrow">USER DIRECTORY</p><h2>用户数据管理</h2></div><div class="content-actions"><span class="panel-note">匿名行为目录 · {{ analyticsUsers.length }} 个用户</span><button v-if="canExport" class="button" type="button" @click="downloadUsersCsv">导出用户 CSV</button></div></div>
         <p class="panel-note user-data-note">当前版本按分析 ID 聚合用户行为，不包含手机号、姓名等个人信息。接入 App 用户表后，这里可扩展账号状态、注册来源和登录设备管理。</p>
         <div class="content-toolbar user-toolbar"><input v-model="userSearch" placeholder="搜索匿名用户 ID" aria-label="搜索用户" @keyup.enter="refresh" /><button class="button" type="button" @click="refresh">查询</button></div>
         <div class="table-wrap"><table><thead><tr><th>用户 ID</th><th>用户类型</th><th>事件数</th><th>首次访问</th><th>最近访问</th><th>平台</th></tr></thead><tbody><tr v-for="user in analyticsUsers" :key="user.analyticsUserId"><td><strong>{{ user.analyticsUserId }}</strong></td><td><span :class="['status', user.analyticsUserId.startsWith('anonymous_') ? 'draft' : 'active']">{{ user.analyticsUserId.startsWith('anonymous_') ? '游客' : '已识别' }}</span></td><td>{{ user.eventCount }}</td><td>{{ new Date(user.firstSeen).toLocaleString() }}</td><td>{{ new Date(user.lastSeen).toLocaleString() }}</td><td>{{ user.platform ?? '-' }}</td></tr></tbody></table><div v-if="!analyticsUsers.length" class="empty">暂无用户行为数据</div></div>
       </section>
-      <section v-if="canReadAnalytics" id="nutrition" class="panel audit-panel nutrition-center">
+      <section v-if="activeModule === 'users' && canReadAnalytics" class="panel audit-panel users-center module-panel">
+        <div class="panel-heading"><div><p class="eyebrow">APP USER ACCOUNTS</p><h2>App 用户数据</h2></div><span class="panel-note">{{ appUsers.length }} 个注册账户</span></div>
+        <div class="table-wrap"><table><thead><tr><th>手机号</th><th>昵称</th><th>目标</th><th>经验</th><th>状态</th><th>注册时间</th><th>最近登录</th></tr></thead><tbody><tr v-for="user in appUsers" :key="user.id"><td><strong>{{ user.phone }}</strong></td><td>{{ user.nickname }}</td><td>{{ user.goal || '-' }}</td><td>{{ user.experienceLevel || '-' }}</td><td><span class="status active">{{ user.status }}</span></td><td>{{ new Date(user.createdAt).toLocaleString() }}</td><td>{{ user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : '-' }}</td></tr></tbody></table><div v-if="!appUsers.length" class="empty">暂无 App 注册用户</div></div>
+        <div class="content-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKOUT RECORDS</p><h2>训练记录</h2></div><span class="panel-note">{{ appWorkouts.length }} 条</span></div><div class="table-wrap"><table><thead><tr><th>用户</th><th>训练</th><th>时长</th><th>组数</th><th>容量</th><th>完成时间</th></tr></thead><tbody><tr v-for="item in appWorkouts" :key="item.id"><td>{{ item.userId.slice(0, 8) }}</td><td>{{ item.title }}</td><td>{{ Math.round(item.durationSeconds / 60) }} 分钟</td><td>{{ item.totalSets }}</td><td>{{ item.totalVolume }}</td><td>{{ new Date(item.completedAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!appWorkouts.length" class="empty">暂无训练记录</div></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION RECORDS</p><h2>饮食记录</h2></div><span class="panel-note">{{ appNutrition.length }} 条</span></div><div class="table-wrap"><table><thead><tr><th>用户</th><th>餐次</th><th>热量</th><th>蛋白质</th><th>食物数</th><th>记录时间</th></tr></thead><tbody><tr v-for="item in appNutrition" :key="item.id"><td>{{ item.userId.slice(0, 8) }}</td><td>{{ item.mealName }}</td><td>{{ item.calories }} kcal</td><td>{{ item.proteinG }} g</td><td>{{ item.foodCount }}</td><td>{{ new Date(item.recordedAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!appNutrition.length" class="empty">暂无饮食记录</div></div></article></div>
+      </section>
+      <section v-if="activeModule === 'nutrition' && canReadAnalytics" class="panel audit-panel nutrition-center module-panel">
         <div class="panel-heading"><div><p class="eyebrow">NUTRITION OPERATIONS</p><h2>饮食管理</h2></div><div class="content-actions"><span class="panel-note">行为数据 · {{ nutrition?.kpis.eventCount ?? 0 }} 条</span><button v-if="canExport" class="button" type="button" @click="downloadNutritionEventsCsv">导出饮食 CSV</button></div></div>
         <div class="stats nutrition-stats">
           <article class="stat"><span>饮食页访问</span><strong>{{ nutrition?.kpis.screenViews ?? 0 }}</strong><small>nutrition_screen_viewed</small></article>
@@ -341,10 +400,11 @@ onMounted(() => { if (token.value) void refresh(); });
         </div>
         <div class="table-wrap"><table><thead><tr><th>时间</th><th>行为</th><th>页面</th><th>平台</th><th>匿名用户</th><th>属性</th></tr></thead><tbody><tr v-for="event in nutrition?.recentEvents ?? []" :key="event.eventId"><td>{{ new Date(event.occurredAt).toLocaleString() }}</td><td><strong>{{ event.eventName }}</strong></td><td>{{ event.screenId ?? '-' }}</td><td>{{ event.platform ?? '-' }}</td><td>{{ event.analyticsUserId ?? '-' }}</td><td class="properties-cell">{{ event.propertiesJson }}</td></tr></tbody></table><div v-if="!nutrition?.recentEvents.length" class="empty">暂无饮食行为数据</div></div>
       </section>
-      <section v-if="role !== 'EMPLOYEE'" id="anatomy" class="panel audit-panel"><div class="panel-heading"><div><p class="eyebrow">ANATOMY CATALOG</p><h2>解剖节点目录</h2></div><span class="panel-note">{{ anatomyNodes.length }} 个节点 · V1</span></div><div class="anatomy-grid"><article v-for="region in anatomyRegions" :key="region.id" class="anatomy-region"><div class="anatomy-region-heading"><strong>{{ region.nameZh }}</strong><small>{{ region.nameEn }}</small></div><div class="anatomy-tags"><span v-for="node in anatomyDescendants(region.id)" :key="node.id" :class="['anatomy-tag', `level-${node.level}`]">{{ node.nameZh }}</span></div></article></div><div v-if="!anatomyNodes.length" class="empty">暂无解剖节点</div></section>
-      <section v-if="canReadAudit" id="audit" class="panel audit-panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>最近审计操作</h2></div><span class="panel-note">管理员可见</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>资源</th><th>来源 IP</th></tr></thead><tbody><tr v-for="log in auditLogs" :key="log.id"><td>{{ new Date(log.occurredAt).toLocaleString() }}</td><td>{{ log.actorSubject }}<small>{{ log.actorRole }}</small></td><td><strong>{{ log.action }}</strong></td><td>{{ log.resourceType }}</td><td>{{ log.ipAddress ?? '-' }}</td></tr></tbody></table><div v-if="!auditLogs.length" class="empty">暂无审计记录</div></div></section>
-      <section v-if="role === 'SUPER_ADMIN'" id="system" class="panel audit-panel"><div class="panel-heading"><div><p class="eyebrow">SYSTEM ACCESS</p><h2>管理员账号</h2></div><span class="panel-note">超级管理员专属</span></div><form class="account-form" aria-label="创建管理员账号" @submit.prevent="createAccount"><input v-model="accountForm.username" required pattern="[A-Za-z0-9._-]{3,80}" placeholder="用户名" autocomplete="username" /><input v-model="accountForm.displayName" required placeholder="显示名称" /><input v-model="accountForm.password" required minlength="12" type="password" placeholder="初始密码（至少 12 位）" autocomplete="new-password" /><select v-model="accountForm.role"><option value="ADMIN">管理员</option><option value="EMPLOYEE">普通员工</option></select><button class="button primary" type="submit" :disabled="accountLoading">{{ accountLoading ? '创建中…' : '创建账号' }}</button></form><div class="table-wrap"><table><thead><tr><th>用户名</th><th>名称</th><th>角色</th><th>状态</th><th>最后登录</th><th>操作</th></tr></thead><tbody><tr v-for="account in adminAccounts" :key="account.id"><td><strong>{{ account.username }}</strong></td><td>{{ account.displayName }}</td><td>{{ account.role }}</td><td><span :class="['status', account.status === 'ACTIVE' ? 'active' : 'locked']">{{ account.status === 'ACTIVE' ? '正常' : '已锁定' }}</span></td><td>{{ account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : '-' }}</td><td><button class="table-action" type="button" @click="toggleAccount(account)">{{ account.status === 'ACTIVE' ? '锁定' : '解锁' }}</button></td></tr></tbody></table><div v-if="!adminAccounts.length" class="empty">暂无管理员账号</div></div><div class="panel-heading session-heading"><div><p class="eyebrow">ACTIVE SESSIONS</p><h2>管理员会话</h2></div><button class="button" type="button" @click="revokeOtherSessions">撤销其他会话</button></div><div class="table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>最后使用</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="session in adminSessions" :key="session.id"><td><strong>{{ session.username }}</strong><small>{{ session.displayName }}</small></td><td>{{ session.role }}</td><td>{{ new Date(session.createdAt).toLocaleString() }}</td><td>{{ new Date(session.lastUsedAt).toLocaleString() }}</td><td><span :class="['status', session.active ? 'active' : 'locked']">{{ session.active ? '使用中' : '已撤销' }}</span></td><td><button v-if="session.active" class="table-action" type="button" @click="revokeSession(session)">撤销</button><span v-else>-</span></td></tr></tbody></table><div v-if="!adminSessions.length" class="empty">暂无会话</div></div></section>
-      <section v-if="canReadContent" id="content" class="panel audit-panel content-center">
+      <section v-if="activeModule === 'anatomy' && role !== 'EMPLOYEE'" class="panel audit-panel module-panel"><div class="panel-heading"><div><p class="eyebrow">ANATOMY CATALOG</p><h2>解剖节点目录</h2></div><span class="panel-note">{{ anatomyNodes.length }} 个节点 · V1</span></div><div class="anatomy-grid"><article v-for="region in anatomyRegions" :key="region.id" class="anatomy-region"><div class="anatomy-region-heading"><strong>{{ region.nameZh }}</strong><small>{{ region.nameEn }}</small></div><div class="anatomy-tags"><span v-for="node in anatomyDescendants(region.id)" :key="node.id" :class="['anatomy-tag', `level-${node.level}`]">{{ node.nameZh }}</span></div></article></div><div v-if="!anatomyNodes.length" class="empty">暂无解剖节点</div></section>
+      <section v-if="activeModule === 'review' && role !== 'EMPLOYEE'" class="coming-soon module-panel"><span class="coming-icon"><ClipboardCheck :size="28" /></span><p class="eyebrow">REVIEW WORKSPACE</p><h2>审核工作台正在建设中</h2><p>已为内容审核、举报处理和阿里云内容安全服务预留独立模块。</p></section>
+      <section v-if="activeModule === 'audit' && canReadAudit" class="panel audit-panel module-panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>最近审计操作</h2></div><span class="panel-note">管理员可见</span></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>资源</th><th>来源 IP</th></tr></thead><tbody><tr v-for="log in auditLogs" :key="log.id"><td>{{ new Date(log.occurredAt).toLocaleString() }}</td><td>{{ log.actorSubject }}<small>{{ log.actorRole }}</small></td><td><strong>{{ log.action }}</strong></td><td>{{ log.resourceType }}</td><td>{{ log.ipAddress ?? '-' }}</td></tr></tbody></table><div v-if="!auditLogs.length" class="empty">暂无审计记录</div></div></section>
+      <section v-if="activeModule === 'system' && role === 'SUPER_ADMIN'" class="panel audit-panel module-panel"><div class="panel-heading"><div><p class="eyebrow">SYSTEM ACCESS</p><h2>管理员账号</h2></div><span class="panel-note">超级管理员专属</span></div><form class="account-form" aria-label="创建管理员账号" @submit.prevent="createAccount"><input v-model="accountForm.username" required pattern="[A-Za-z0-9._-]{3,80}" placeholder="用户名" autocomplete="username" /><input v-model="accountForm.displayName" required placeholder="显示名称" /><input v-model="accountForm.password" required minlength="12" type="password" placeholder="初始密码（至少 12 位）" autocomplete="new-password" /><select v-model="accountForm.role"><option value="ADMIN">管理员</option><option value="EMPLOYEE">普通员工</option></select><button class="button primary" type="submit" :disabled="accountLoading">{{ accountLoading ? '创建中…' : '创建账号' }}</button></form><div class="table-wrap"><table><thead><tr><th>用户名</th><th>名称</th><th>角色</th><th>状态</th><th>最后登录</th><th>操作</th></tr></thead><tbody><tr v-for="account in adminAccounts" :key="account.id"><td><strong>{{ account.username }}</strong></td><td>{{ account.displayName }}</td><td>{{ account.role }}</td><td><span :class="['status', account.status === 'ACTIVE' ? 'active' : 'locked']">{{ account.status === 'ACTIVE' ? '正常' : '已锁定' }}</span></td><td>{{ account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : '-' }}</td><td><button class="table-action" type="button" @click="toggleAccount(account)">{{ account.status === 'ACTIVE' ? '锁定' : '解锁' }}</button></td></tr></tbody></table><div v-if="!adminAccounts.length" class="empty">暂无管理员账号</div></div><div class="panel-heading session-heading"><div><p class="eyebrow">ACTIVE SESSIONS</p><h2>管理员会话</h2></div><button class="button" type="button" @click="revokeOtherSessions">撤销其他会话</button></div><div class="table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>最后使用</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="session in adminSessions" :key="session.id"><td><strong>{{ session.username }}</strong><small>{{ session.displayName }}</small></td><td>{{ session.role }}</td><td>{{ new Date(session.createdAt).toLocaleString() }}</td><td>{{ new Date(session.lastUsedAt).toLocaleString() }}</td><td><span :class="['status', session.active ? 'active' : 'locked']">{{ session.active ? '使用中' : '已撤销' }}</span></td><td><button v-if="session.active" class="table-action" type="button" @click="revokeSession(session)">撤销</button><span v-else>-</span></td></tr></tbody></table><div v-if="!adminSessions.length" class="empty">暂无会话</div></div></section>
+      <section v-if="activeModule === 'content' && canReadContent" class="panel audit-panel content-center module-panel">
         <div class="panel-heading"><div><p class="eyebrow">CONTENT CENTER</p><h2>内容中心</h2></div><span class="panel-note">{{ contentItems.length }} 条内容</span></div>
         <div class="content-toolbar"><input v-model="contentSearch" placeholder="搜索标题或摘要" aria-label="搜索内容" @keyup.enter="refreshContent" /><select v-model="contentStatusFilter" aria-label="按状态筛选" @change="refreshContent"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="PUBLISHED">已发布</option><option value="ARCHIVED">已归档</option></select><select v-model="contentTypeFilter" aria-label="按类型筛选" @change="refreshContent"><option value="">全部类型</option><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><button v-if="canManageContent" class="button primary" type="button" :disabled="contentLoading || contentUploading" @click="startNewContent">新建内容</button></div>
         <form v-if="contentFormOpen && canManageContent" class="content-form" aria-label="内容编辑表单" @submit.prevent="saveContent">

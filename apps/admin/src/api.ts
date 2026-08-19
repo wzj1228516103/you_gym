@@ -60,6 +60,9 @@ export type AnalyticsUser = {
   lastSeen: string;
   platform: string | null;
 };
+export type AppUser = { id: string; phone: string; nickname: string; gender: string | null; goal: string | null; experienceLevel: string | null; status: string; createdAt: string; lastLoginAt: string | null };
+export type WorkoutRecord = { id: string; userId: string; title: string; durationSeconds: number; totalSets: number; totalVolume: number; calories: number; completedAt: string };
+export type NutritionRecord = { id: string; userId: string; mealName: string; calories: number; proteinG: number; carbohydratesG: number; fatG: number; foodCount: number; recordedAt: string };
 
 export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE';
 
@@ -253,6 +256,10 @@ export function fetchAdminSessions(token: string) {
 export function fetchAdminAnatomyNodes(token: string) {
   return request<{ version: number; items: AnatomyNode[] }>('/api/admin/v1/anatomy/nodes', token);
 }
+
+export function fetchAppUsers(token: string, search?: string) { const params = new URLSearchParams({ limit: '200' }); if (search) params.set('search', search); return request<{ items: AppUser[] }>(`/api/admin/v1/app-users?${params.toString()}`, token); }
+export function fetchAppWorkouts(token: string, userId?: string) { const params = new URLSearchParams({ limit: '200' }); if (userId) params.set('userId', userId); return request<{ items: WorkoutRecord[] }>(`/api/admin/v1/app-users/workouts?${params.toString()}`, token); }
+export function fetchAppNutrition(token: string, userId?: string) { const params = new URLSearchParams({ limit: '200' }); if (userId) params.set('userId', userId); return request<{ items: NutritionRecord[] }>(`/api/admin/v1/app-users/nutrition?${params.toString()}`, token); }
 
 export function fetchContent(token: string, filters: { status?: ContentStatus; contentType?: ContentType; search?: string } = {}) {
   const params = new URLSearchParams({ limit: '200' });

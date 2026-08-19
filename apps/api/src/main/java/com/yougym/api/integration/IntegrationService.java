@@ -31,7 +31,11 @@ public class IntegrationService {
     }
 
     public SmsGateway.SendResult sendSms(String phoneNumber, String purpose) {
-        return sms().sendVerificationCode(phoneNumber, purpose);
+        return sendSms(phoneNumber, purpose, String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000)));
+    }
+
+    public SmsGateway.SendResult sendSms(String phoneNumber, String purpose, String code) {
+        return sms().sendVerificationCode(phoneNumber, purpose, code);
     }
 
     public EmailGateway.SendResult sendEmail(String email, String purpose) {

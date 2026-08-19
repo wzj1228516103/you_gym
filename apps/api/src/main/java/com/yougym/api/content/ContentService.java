@@ -71,6 +71,14 @@ public class ContentService {
         return refreshMediaUrls(repository.find(status, contentType, search, limit));
     }
 
+    public List<ContentRepository.ContentItem> findPublished(String contentType, String search, int limit) {
+        return find("PUBLISHED", contentType, search, limit);
+    }
+
+    public List<ContentRepository.ContentItem> findPublishedByAnatomyNode(String contentType, String anatomyNodeId, int limit) {
+        return refreshMediaUrls(repository.findPublishedByAnatomyNode(contentType, anatomyNodeId, limit));
+    }
+
     private void validate(ContentAdminController.ContentRequest request) {
         if (!java.util.Set.of("ARTICLE", "VIDEO", "GIF", "MODEL_3D", "EXERCISE").contains(request.contentType())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid content type");
     }

@@ -10,6 +10,7 @@ export type AnatomyNode = {
   muscle: string;
   part: string;
   nameEn: string;
+  displayName?: string;
   side: BodySide;
   hotspot: { left: `${number}%`; top: `${number}%`; width: `${number}%`; height: `${number}%`; radius?: number };
   hotspots?: { left: `${number}%`; top: `${number}%`; width: `${number}%`; height: `${number}%`; radius?: number }[];
@@ -36,7 +37,7 @@ export type Exercise = {
 
 export type RootStackParamList = {
   Auth: undefined;
-  Otp: { phone: string };
+  Otp: { phone: string; purpose: 'LOGIN' | 'REGISTER'; mockMode: boolean };
   Onboarding: undefined;
   Main: undefined;
 };
@@ -44,7 +45,7 @@ export type RootStackParamList = {
 export type AnatomyStackParamList = {
   AnatomyHome: undefined;
   ExerciseFilter: { nodeId: string };
-  ExerciseDetail: { exerciseId: string };
+  ExerciseDetail: { exerciseId: string; nodeId?: string };
 };
 
 export type PlanStackParamList = {
@@ -73,6 +74,19 @@ export type ProfileStackParamList = {
   Storage: undefined;
   Help: undefined;
   AccountSecurity: undefined;
+};
+
+export type AnatomyTreeNode = {
+  id: string;
+  parentId: string;
+  code: string;
+  nameZh: string;
+  nameEn: string;
+  level: number;
+  view: string;
+  side: string;
+  assetPath: string;
+  children: AnatomyTreeNode[];
 };
 
 export type CommunityStackParamList = {

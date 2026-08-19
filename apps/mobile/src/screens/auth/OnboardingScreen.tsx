@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, PrimaryButton, SecondaryButton, SegmentedControl } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { RootStackParamList } from '../../types';
+import { useAuthState } from '../../state/AuthState';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 type GoalValue = '减脂' | '增肌' | '维持' | '提升体能';
@@ -25,8 +26,18 @@ export function OnboardingScreen({ navigation }: Props) {
   const [frequency, setFrequency] = useState('4次');
   const [venue, setVenue] = useState('健身房');
   const [equipment, setEquipment] = useState(['哑铃', '杠铃']);
+  const [saving, setSaving] = useState(false);
+  const { updateProfile, guest } = useAuthState();
 
-  const next = () => step === 4 ? navigation.replace('Main') : setStep((current) => current + 1);
+  const next = async () => {
+    if (step !== 4) { setStep((current) => current + 1); return; }
+    if (!guest) {
+      setSaving(true);
+      try { await updateProfile({ gender, goal, experienceLevel: level, weeklyFrequency: frequency, venue, equipment }); }
+      finally { setSaving(false); }
+    }
+    navigation.replace('Main');
+  };
 
   return (
     <AppScreen contentStyle={styles.content}>
@@ -103,7 +114,7 @@ export function OnboardingScreen({ navigation }: Props) {
 
       <View style={styles.footer}>
         {step > 0 && step < 4 ? <SecondaryButton label="上一步" onPress={() => setStep((current) => current - 1)} style={styles.backButton} /> : null}
-        <PrimaryButton label={step === 4 ? '进入 YOU GYM' : '下一步'} onPress={next} style={styles.nextButton} />
+        <PrimaryButton label={saving ? '保存中…' : step === 4 ? '进入 YOU GYM' : '下一步'} disabled={saving} onPress={() => void next()} style={styles.nextButton} />
       </View>
     </AppScreen>
   );

@@ -35,6 +35,8 @@ import { StorageScreen } from './src/screens/profile/StorageScreen';
 import { CommunityHomeScreen } from './src/screens/community/CommunityHomeScreen';
 import { flushAnalyticsEventsToApi, startAnalyticsSession, trackEvent } from './src/services/analytics';
 import { AppStateProvider } from './src/state/AppState';
+import { AuthStateProvider } from './src/state/AuthState';
+import { useAuthState } from './src/state/AuthState';
 import { colors, radius, spacing, typography } from './src/theme';
 import type { AnatomyStackParamList, CommunityStackParamList, MainTabParamList, NutritionStackParamList, PlanStackParamList, ProfileStackParamList, RootStackParamList } from './src/types';
 
@@ -83,6 +85,19 @@ function MainTabs() {
   );
 }
 
+function RootNavigator() {
+  const { loading, token, guest } = useAuthState();
+  if (loading) return <View style={styles.loading}><Text style={styles.loadingText}>YOU GYM</Text></View>;
+  return (
+    <RootStack.Navigator key={token || guest ? 'main' : 'auth'} initialRouteName={token || guest ? 'Main' : 'Auth'} screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: colors.background } }}>
+      <RootStack.Screen name="Auth" component={AuthScreen} />
+      <RootStack.Screen name="Otp" component={OtpScreen} />
+      <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
+      <RootStack.Screen name="Main" component={MainTabs} />
+    </RootStack.Navigator>
+  );
+}
+
 function TabBar({ state, descriptors, navigation }: any) {
   const activeRoute = state.routes[state.index];
   if ((activeRoute.state?.index ?? 0) > 0) return null;
@@ -126,21 +141,20 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppStateProvider>
+      <AuthStateProvider>
         <NavigationContainer theme={navigationTheme}>
           <StatusBar style="light" />
-          <RootStack.Navigator initialRouteName="Auth" screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: colors.background } }}>
-            <RootStack.Screen name="Auth" component={AuthScreen} />
-            <RootStack.Screen name="Otp" component={OtpScreen} />
-            <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
-            <RootStack.Screen name="Main" component={MainTabs} />
-          </RootStack.Navigator>
+          <RootNavigator />
         </NavigationContainer>
+      </AuthStateProvider>
       </AppStateProvider>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  loadingText: { ...typography.pageTitle, color: colors.primary },
   tabBarOuter: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: spacing.x4, paddingBottom: spacing.x2, backgroundColor: 'transparent' },
   tabBar: { height: 72, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(26,26,29,0.97)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.x2 },
   tabItemWrap: { flex: 1, height: 58, position: 'relative' },

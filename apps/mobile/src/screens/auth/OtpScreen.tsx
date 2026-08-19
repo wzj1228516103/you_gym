@@ -4,12 +4,31 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, PrimaryButton, ScreenHeader } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { RootStackParamList } from '../../types';
+import { verifySmsCode } from '../../services/api';
+import { useAuthState } from '../../state/AuthState';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Otp'>;
 
 export function OtpScreen({ navigation, route }: Props) {
   const [code, setCode] = useState('');
   const digits = useMemo(() => Array.from({ length: 6 }, (_, index) => code[index] ?? ''), [code]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { authenticate } = useAuthState();
+
+  async function verify() {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await verifySmsCode(`+86${route.params.phone.replace(/\D/g, '')}`, route.params.purpose, code);
+      await authenticate(result.accessToken, result.user);
+      navigation.replace(result.needsOnboarding ? 'Onboarding' : 'Main');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '验证码错误');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <AppScreen keyboard contentStyle={styles.content}>
@@ -36,10 +55,11 @@ export function OtpScreen({ navigation, route }: Props) {
       </View>
 
       <Text style={styles.resend}>53s 后可重新发送</Text>
-      <PrimaryButton label="登录" disabled={code.length !== 6} onPress={() => navigation.replace('Onboarding')} />
-      <Pressable accessibilityRole="button" onPress={() => setCode('123456')} hitSlop={12}>
+      <PrimaryButton label={loading ? '验证中…' : '登录'} disabled={code.length !== 6 || loading} onPress={() => void verify()} />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {route.params.mockMode ? <Pressable accessibilityRole="button" onPress={() => setCode('123456')} hitSlop={12}>
         <Text style={styles.demoCode}>使用体验验证码 123456</Text>
-      </Pressable>
+      </Pressable> : null}
     </AppScreen>
   );
 }
@@ -56,4 +76,5 @@ const styles = StyleSheet.create({
   hiddenInput: { ...StyleSheet.absoluteFill, opacity: 0 },
   resend: { ...typography.caption, color: colors.textTertiary, textAlign: 'center' },
   demoCode: { ...typography.caption, color: colors.textSecondary, textAlign: 'center' },
+  error: { ...typography.caption, color: colors.muscle, textAlign: 'center' },
 });

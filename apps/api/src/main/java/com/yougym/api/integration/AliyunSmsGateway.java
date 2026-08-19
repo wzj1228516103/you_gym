@@ -18,14 +18,13 @@ public class AliyunSmsGateway implements SmsGateway {
     }
 
     @Override
-    public SendResult sendVerificationCode(String phoneNumber, String purpose) {
+    public SendResult sendVerificationCode(String phoneNumber, String purpose, String code) {
         IntegrationProperties.Sms sms = properties.getSms();
         require(sms.getAccessKeyId(), "SMS access key id");
         require(sms.getAccessKeySecret(), "SMS access key secret");
         require(sms.getSignName(), "SMS sign name");
         require(sms.getTemplateCode(), "SMS template code");
 
-        String code = String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
         StaticCredentialProvider provider = StaticCredentialProvider.create(Credential.builder()
                 .accessKeyId(sms.getAccessKeyId())
                 .accessKeySecret(sms.getAccessKeySecret())

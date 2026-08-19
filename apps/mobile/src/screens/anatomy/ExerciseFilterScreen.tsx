@@ -3,7 +3,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bookmark, ChevronRight, Dumbbell, SearchX, SlidersHorizontal, Star } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, IconButton, ScreenHeader, Tag } from '../../components/ui';
-import { anatomyNodes, exercises } from '../../data/mockData';
+import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
 import type { AnatomyStackParamList } from '../../types';
@@ -11,6 +11,7 @@ import type { AnatomyStackParamList } from '../../types';
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseFilter'>;
 
 export function ExerciseFilterScreen({ navigation, route }: Props) {
+  const { anatomyNodes, exercises } = useAppState();
   const node = anatomyNodes.find((item) => item.id === route.params.nodeId) ?? anatomyNodes[0];
   useEffect(() => {
     trackEvent('screen_viewed', { nodeId: node.id, muscle: node.muscle }, { screenId: 'exercise_filter' });
@@ -52,7 +53,7 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
           <Pressable onPress={() => { setLocation('全部'); setEquipment('全部'); setLevel('全部'); }} style={styles.resetButton}><Text style={styles.resetText}>重置筛选</Text></Pressable>
         </Card>
       ) : results.map((exercise) => (
-        <Card key={exercise.id} onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: exercise.id })} accessibilityLabel={`查看${exercise.name}`} style={styles.exerciseCard}>
+        <Card key={exercise.id} onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: exercise.id, nodeId: node.id })} accessibilityLabel={`查看${exercise.name}`} style={styles.exerciseCard}>
           <View style={styles.exerciseArt}><Dumbbell size={28} color={colors.muscle} /></View>
           <View style={styles.exerciseCopy}>
             <Text style={styles.exerciseName}>{exercise.name}</Text>

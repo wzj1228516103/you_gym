@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { API_BASE_URL } from './api';
 
 const STORAGE_KEY = 'you-gym:analytics-events:v1';
 const ANALYTICS_ID_STORAGE_KEY = 'you-gym:analytics-anonymous-id:v1';
 const MAX_PENDING_EVENTS = 100;
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 const APP_VERSION = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.1.0';
 
 export type AnalyticsEventName =

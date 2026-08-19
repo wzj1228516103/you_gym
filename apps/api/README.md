@@ -76,6 +76,65 @@ Never copy the `nn_family` EOS credentials into this project. That project uses 
 
 ## Analytics API
 
+## App API
+
+The mobile app is connected to the Spring Boot API through these routes:
+
+```text
+POST  /api/v1/auth/sms/code
+POST  /api/v1/auth/sms/verify
+GET   /api/v1/me
+PATCH /api/v1/me
+POST  /api/v1/me/workouts
+GET   /api/v1/me/workouts
+POST  /api/v1/me/nutrition
+GET   /api/v1/me/nutrition
+GET   /api/v1/anatomy/tree?gender=all&view=all
+GET   /api/v1/content?contentType=EXERCISE&search=动作名称
+GET   /api/v1/exercises?search=深蹲&equipment=杠铃
+GET   /api/v1/exercises/{id}
+```
+
+Local mock integration mode accepts the experience verification code `123456`.
+Production mode stores only a SHA-256 code hash and sends the generated code
+through the configured Aliyun SMS gateway. App sessions are bearer tokens with
+30-day expiry. Guest preview remains available and only sends anonymous
+analytics; it does not create an account or business records.
+
+The admin API exposes persisted App data to users with `ANALYTICS_READ`:
+
+```text
+GET /api/admin/v1/app-users
+GET /api/admin/v1/app-users/workouts
+GET /api/admin/v1/app-users/nutrition
+```
+
+For Expo on a physical device, set `EXPO_PUBLIC_API_BASE_URL` to the machine's
+LAN address, for example `http://192.168.1.20:8080`. Android emulators use
+`http://10.0.2.2:8080` by default; iOS simulator and web default to
+`http://localhost:8080`.
+
+### Backend package convention
+
+New business modules follow the `nn-family` style of explicit layers:
+
+```text
+com.yougym.api.<module>
+├── controller       HTTP routes, validation, permissions and response shaping
+├── service          module interfaces
+│   └── impl         transaction and business orchestration
+├── mapper           database access (MyBatis/MyBatis-Plus)
+├── entity           persistence models
+├── dto              request/query models
+└── vo               response models
+```
+
+The analytics user directory is the first migrated module. Its routes remain
+`/api/admin/v1/analytics/users` and `/api/admin/v1/analytics/users.csv`; the
+existing JDBC repositories remain in place for the other analytics reports and
+will be migrated module by module. MyBatis-Plus is configured for Boot 3 and
+supports the same MySQL/H2 test setup.
+
 Mobile clients can upload up to 100 events per request. `eventId` is the idempotency key.
 
 The Expo client reads `EXPO_PUBLIC_API_BASE_URL` and uploads queued events when an event is created or the app returns to the foreground. A failed upload leaves the local queue intact. Guest analytics IDs are persisted in AsyncStorage and are not treated as authenticated user IDs.
