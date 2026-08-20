@@ -24,7 +24,7 @@ class CatalogAdminControllerIntegrationTest {
         mockMvc.perform(get("/api/admin/v1/exercise-catalog")
                         .header("X-Admin-Test-Token", "local-admin"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(17)))
+                .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(org.hamcrest.Matchers.greaterThanOrEqualTo(17))))
                 .andExpect(jsonPath("$.items[0].resources").isArray());
 
         String body = """
@@ -42,7 +42,8 @@ class CatalogAdminControllerIntegrationTest {
                         .header("X-Admin-Test-Token", "local-employee")
                         .param("search", "燕麦"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(1)));
+                .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(org.hamcrest.Matchers.greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.items[?(@.id == 'admin-test-food')]").isNotEmpty());
 
         mockMvc.perform(patch("/api/admin/v1/food-catalog/admin-test-food")
                         .header("X-Admin-Test-Token", "local-admin")

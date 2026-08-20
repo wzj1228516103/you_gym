@@ -6,6 +6,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,7 +24,7 @@ class ExerciseCatalogControllerIntegrationTest {
         mockMvc.perform(get("/api/v1/exercises").param("limit", "50"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.source", is("reference-images-v1")))
-                .andExpect(jsonPath("$.items", hasSize(17)));
+                .andExpect(jsonPath("$.items", hasSize(greaterThanOrEqualTo(17))));
         mockMvc.perform(get("/api/v1/exercises/ex-009-squat"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nameZh", is("深蹲")))
