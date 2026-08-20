@@ -1,5 +1,7 @@
 package com.yougym.api.catalog.mapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -13,14 +15,17 @@ import java.util.Map;
 
 @Repository
 public class FoodCatalogMapper {
+    private static final TypeReference<List<Map<String, Object>>> MEDIA_LIST = new TypeReference<>() {};
     private final JdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
 
-    public FoodCatalogMapper(JdbcTemplate jdbc) {
+    public FoodCatalogMapper(JdbcTemplate jdbc, ObjectMapper objectMapper) {
         this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
     }
 
     public List<Map<String, Object>> find(String search, String status, int limit) {
-        StringBuilder sql = new StringBuilder("SELECT id,name_zh AS name,serving_label AS serving,calories_per_100g AS calories,protein_per_100g AS protein,carbs_per_100g AS carbs,fat_per_100g AS fat,source,status,created_at AS createdAt,updated_at AS updatedAt FROM food_catalog WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT id,name_zh AS name,serving_label AS serving,calories_per_100g AS calories,protein_per_100g AS protein,carbs_per_100g AS carbs,fat_per_100g AS fat,source,status,media_url AS mediaUrl,media_assets_json AS mediaAssetsJson,created_at AS createdAt,updated_at AS updatedAt FROM food_catalog WHERE 1=1");
         List<Object> args = new ArrayList<>();
         if (status != null && !status.isBlank()) {
             sql.append(" AND status=?");
@@ -34,11 +39,11 @@ public class FoodCatalogMapper {
         }
         sql.append(" ORDER BY updated_at DESC,name_zh LIMIT ?");
         args.add(limit);
-        return jdbc.queryForList(sql.toString(), args.toArray()).stream().map(FoodCatalogMapper::copy).toList();
+        return jdbc.queryForList(sql.toString(), args.toArray()).stream().map(this::copy).toList();
     }
 
     public Map<String, Object> findById(String id) {
-        List<Map<String, Object>> rows = jdbc.queryForList("SELECT id,name_zh AS name,serving_label AS serving,calories_per_100g AS calories,protein_per_100g AS protein,carbs_per_100g AS carbs,fat_per_100g AS fat,source,status,created_at AS createdAt,updated_at AS updatedAt FROM food_catalog WHERE id=?", id);
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT id,name_zh AS name,serving_label AS serving,calories_per_100g AS calories,protein_per_100g AS protein,carbs_per_100g AS carbs,fat_per_100g AS fat,source,status,media_url AS mediaUrl,media_assets_json AS mediaAssetsJson,created_at AS createdAt,updated_at AS updatedAt FROM food_catalog WHERE id=?", id);
         return rows.isEmpty() ? null : copy(rows.get(0));
     }
 
@@ -48,15 +53,16 @@ public class FoodCatalogMapper {
     }
 
     public void insert(String id, String name, String serving, BigDecimal calories, BigDecimal protein,
-                       BigDecimal carbs, BigDecimal fat, String source, String status, Instant now) {
-        jdbc.update("INSERT INTO food_catalog (id,name_zh,serving_label,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,source,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                id, name, serving, calories, protein, carbs, fat, source, status, Timestamp.from(now), Timestamp.from(now));
+                       BigDecimal carbs, BigDecimal fat, String source, String status, String mediaUrl,
+                       List<?> mediaAssets, Instant now) {
+        jdbc.update("INSERT INTO food_catalog (id,name_zh,serving_label,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,source,status,media_url,media_assets_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                id, name, serving, calories, protein, carbs, fat, source, status, mediaUrl, mediaJson(mediaAssets), Timestamp.from(now), Timestamp.from(now));
     }
 
     public void update(String id, String name, String serving, BigDecimal calories, BigDecimal protein,
-                       BigDecimal carbs, BigDecimal fat, String source, Instant now) {
-        jdbc.update("UPDATE food_catalog SET name_zh=?,serving_label=?,calories_per_100g=?,protein_per_100g=?,carbs_per_100g=?,fat_per_100g=?,source=?,updated_at=? WHERE id=?",
-                name, serving, calories, protein, carbs, fat, source, Timestamp.from(now), id);
+                       BigDecimal carbs, BigDecimal fat, String source, String mediaUrl, List<?> mediaAssets, Instant now) {
+        jdbc.update("UPDATE food_catalog SET name_zh=?,serving_label=?,calories_per_100g=?,protein_per_100g=?,carbs_per_100g=?,fat_per_100g=?,source=?,media_url=?,media_assets_json=?,updated_at=? WHERE id=?",
+                name, serving, calories, protein, carbs, fat, source, mediaUrl, mediaJson(mediaAssets), Timestamp.from(now), id);
     }
 
     public void updateStatus(String id, String status, Instant now) {
@@ -67,7 +73,7 @@ public class FoodCatalogMapper {
         return jdbc.update("DELETE FROM food_catalog WHERE id=?", id) > 0;
     }
 
-    private static Map<String, Object> copy(Map<String, Object> row) {
+    private Map<String, Object> copy(Map<String, Object> row) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", value(row, "id"));
         result.put("name", value(row, "name"));
@@ -78,6 +84,8 @@ public class FoodCatalogMapper {
         result.put("fat", value(row, "fat"));
         result.put("source", value(row, "source"));
         result.put("status", value(row, "status"));
+        result.put("mediaUrl", value(row, "mediaUrl"));
+        result.put("mediaAssets", parseMedia((String) value(row, "mediaAssetsJson")));
         result.put("createdAt", value(row, "createdAt"));
         result.put("updatedAt", value(row, "updatedAt"));
         return result;
@@ -86,5 +94,15 @@ public class FoodCatalogMapper {
     private static Object value(Map<String, Object> row, String name) {
         for (var entry : row.entrySet()) if (entry.getKey().equalsIgnoreCase(name)) return entry.getValue();
         return null;
+    }
+
+    private String mediaJson(List<?> mediaAssets) {
+        try { return objectMapper.writeValueAsString(mediaAssets == null ? List.of() : mediaAssets); }
+        catch (Exception exception) { throw new IllegalArgumentException("invalid food media", exception); }
+    }
+
+    private List<Map<String, Object>> parseMedia(String json) {
+        try { return json == null || json.isBlank() ? List.of() : objectMapper.readValue(json, MEDIA_LIST); }
+        catch (Exception ignored) { return List.of(); }
     }
 }

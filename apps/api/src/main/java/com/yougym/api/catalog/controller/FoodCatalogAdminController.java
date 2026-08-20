@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/v1/food-catalog")
@@ -44,7 +45,7 @@ public class FoodCatalogAdminController {
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> create(@Valid @RequestBody FoodRequest body, HttpServletRequest request) {
         var principal = access.authorize(request, AdminPermission.CATALOG_MANAGE);
-        var item = service.create(body.id(), body.name(), body.serving(), body.calories(), body.protein(), body.carbs(), body.fat(), body.source(), body.status());
+        var item = service.create(body.id(), body.name(), body.serving(), body.calories(), body.protein(), body.carbs(), body.fat(), body.source(), body.status(), body.mediaUrl(), body.mediaAssets());
         audit.record(principal, "FOOD_CREATED", "food_catalog", String.valueOf(item.get("id")), request, Map.of("name", item.get("name")));
         return item;
     }
@@ -52,7 +53,7 @@ public class FoodCatalogAdminController {
     @PatchMapping("/{id}")
     public Map<String, Object> update(@PathVariable String id, @Valid @RequestBody FoodRequest body, HttpServletRequest request) {
         var principal = access.authorize(request, AdminPermission.CATALOG_MANAGE);
-        var item = service.update(id, body.name(), body.serving(), body.calories(), body.protein(), body.carbs(), body.fat(), body.source());
+        var item = service.update(id, body.name(), body.serving(), body.calories(), body.protein(), body.carbs(), body.fat(), body.source(), body.mediaUrl(), body.mediaAssets());
         audit.record(principal, "FOOD_UPDATED", "food_catalog", id, request, Map.of());
         return item;
     }
@@ -82,7 +83,9 @@ public class FoodCatalogAdminController {
             @NotNull @DecimalMin("0") BigDecimal carbs,
             @NotNull @DecimalMin("0") BigDecimal fat,
             @NotBlank @Size(max = 80) String source,
-            String status) {}
+            String status,
+            @Size(max = 1000) String mediaUrl,
+            @Size(max = 10) List<FoodCatalogService.MediaAsset> mediaAssets) {}
 
     public record StatusRequest(@NotBlank String status) {}
 }

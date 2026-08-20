@@ -15,6 +15,7 @@ import {
   fetchAppNutrition, fetchAppUsers, fetchAppWorkouts,
   type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard, type AppUser, type WorkoutRecord, type NutritionRecord, type ExerciseCatalogItem, type FoodCatalogItem, type FoodCatalogInput,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
+  resolveMediaUrl,
 } from './api';
 
 const sessionStorageKey = 'you-gym:admin-session';
@@ -46,7 +47,14 @@ const foodStatusFilter = ref<FoodCatalogItem['status'] | ''>('');
 const foodFormOpen = ref(false);
 const foodEditingId = ref<string | null>(null);
 const foodLoading = ref(false);
-const foodForm = ref<FoodCatalogInput>({ name: '', serving: '100g', calories: 0, protein: 0, carbs: 0, fat: 0, source: 'YOU GYM', status: 'ACTIVE' });
+const foodUploading = ref(false);
+const foodUploadProgress = ref(0);
+const foodUploadMessage = ref('');
+const foodUploadFailures = ref<{ fileName: string; error: string }[]>([]);
+const foodRemovedAssets = ref<ContentMediaAsset[]>([]);
+const foodUploadedInForm = ref<ContentMediaAsset[]>([]);
+const foodUploadInput = ref<HTMLInputElement | null>(null);
+const foodForm = ref<FoodCatalogInput>({ name: '', serving: '100g', calories: 0, protein: 0, carbs: 0, fat: 0, source: 'YOU GYM', status: 'ACTIVE', mediaUrl: '', mediaAssets: [] });
 const userSearch = ref('');
 const contentStatusFilter = ref<ContentStatus | ''>('');
 const contentTypeFilter = ref<ContentType | ''>('');
@@ -118,6 +126,8 @@ function rangeBounds() {
 
 const contentTypeLabel: Record<ContentType, string> = { ARTICLE: '文章', VIDEO: '视频', GIF: 'GIF', MODEL_3D: '3D 模型', EXERCISE: '动作课程' };
 const contentStatusLabel: Record<ContentStatus, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' };
+function isVideoUrl(url: string | null | undefined) { return /\.(mp4|mov|avi|webm|mkv)(?:\?|$)/i.test(url ?? ''); }
+function isImageUrl(url: string | null | undefined) { return /\.(jpg|jpeg|png|gif|bmp|webp)(?:\?|$)/i.test(url ?? ''); }
 function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', mediaAssets: [], anatomyNodeId: '' }; }
 function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])], anatomyNodeId: item.anatomyNodeId ?? '' }; }
 async function refreshContent() {
@@ -136,23 +146,41 @@ async function refreshFoodCatalog() { if (!canReadAnalytics.value) return; foodC
 function resetFoodForm() {
   foodEditingId.value = null;
   foodFormOpen.value = false;
-  foodForm.value = { name: '', serving: '100g', calories: 0, protein: 0, carbs: 0, fat: 0, source: 'YOU GYM', status: 'ACTIVE' };
+  foodUploadMessage.value = '';
+  foodUploadFailures.value = [];
+  foodUploadProgress.value = 0;
+  foodRemovedAssets.value = [];
+  foodUploadedInForm.value = [];
+  foodForm.value = { name: '', serving: '100g', calories: 0, protein: 0, carbs: 0, fat: 0, source: 'YOU GYM', status: 'ACTIVE', mediaUrl: '', mediaAssets: [] };
 }
 function editFood(item: FoodCatalogItem) {
   foodEditingId.value = item.id;
   foodFormOpen.value = true;
-  foodForm.value = { id: item.id, name: item.name, serving: item.serving, calories: Number(item.calories), protein: Number(item.protein), carbs: Number(item.carbs), fat: Number(item.fat), source: item.source, status: item.status };
+  foodUploadMessage.value = '';
+  foodUploadFailures.value = [];
+  foodUploadProgress.value = 0;
+  foodRemovedAssets.value = [];
+  foodUploadedInForm.value = [];
+  foodForm.value = { id: item.id, name: item.name, serving: item.serving, calories: Number(item.calories), protein: Number(item.protein), carbs: Number(item.carbs), fat: Number(item.fat), source: item.source, status: item.status, mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])] };
 }
 function startNewFood() { resetFoodForm(); foodFormOpen.value = true; }
 async function saveFood() {
   foodLoading.value = true;
   error.value = '';
+  const uploaded = [...foodUploadedInForm.value];
   try {
     if (foodEditingId.value) await updateFoodCatalogItem(token.value, foodEditingId.value, foodForm.value);
     else await createFoodCatalogItem(token.value, foodForm.value);
+    const removed = [...foodRemovedAssets.value];
     resetFoodForm();
     await refreshFoodCatalog();
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : '保存食物失败'; }
+    const cleanup = await cleanupContentAssets(removed);
+    if (!cleanup) error.value = '食物已保存，但部分未使用媒体资源清理失败';
+  } catch (cause) {
+    const cleanup = await cleanupContentAssets(uploaded);
+    error.value = cause instanceof Error ? cause.message : '保存食物失败';
+    if (!cleanup) error.value += '；部分未保存媒体资源清理失败';
+  }
   finally { foodLoading.value = false; }
 }
 async function changeFoodStatus(item: FoodCatalogItem, status: FoodCatalogItem['status']) {
@@ -161,7 +189,7 @@ async function changeFoodStatus(item: FoodCatalogItem, status: FoodCatalogItem['
 }
 async function removeFood(item: FoodCatalogItem) {
   if (!window.confirm(`确认删除“${item.name}”吗？该食物将不再出现在 App 食物搜索中。`)) return;
-  try { await deleteFoodCatalogItem(token.value, item.id); await refreshFoodCatalog(); }
+  try { await deleteFoodCatalogItem(token.value, item.id); await refreshFoodCatalog(); const cleanup = await cleanupContentAssets(item.mediaAssets ?? []); if (!cleanup) error.value = '食物已删除，但部分媒体资源清理失败'; }
   catch (cause) { error.value = cause instanceof Error ? cause.message : '删除食物失败'; }
 }
 async function cleanupContentAssets(assets: ContentMediaAsset[]) {
@@ -250,6 +278,27 @@ async function uploadContentFiles(files: File[]) {
 async function handleContentFiles(event: Event) { const input = event.target as HTMLInputElement; const files = Array.from(input.files ?? []); input.value = ''; await uploadContentFiles(files); }
 async function handleContentDrop(event: DragEvent) { contentDropActive.value = false; await uploadContentFiles(Array.from(event.dataTransfer?.files ?? [])); }
 function removeContentMedia(index: number) { const [asset] = contentForm.value.mediaAssets.splice(index, 1); if (asset && !contentRemovedAssets.value.some((item) => item.objectName === asset.objectName)) contentRemovedAssets.value.push(asset); contentForm.value.mediaUrl = contentForm.value.mediaAssets[0]?.url ?? ''; }
+async function uploadFoodFiles(files: File[]) {
+  if (!files.length) return;
+  const remaining = 10 - (foodForm.value.mediaAssets?.length ?? 0);
+  if (files.length > remaining) { foodUploadMessage.value = `本次最多还能上传 ${remaining} 个资源`; return; }
+  const checked = validateContentFiles(files);
+  foodUploadFailures.value = checked.failures;
+  if (!checked.valid.length) { foodUploadMessage.value = checked.failures.length ? '没有可上传的资源' : '请选择资源'; return; }
+  foodUploading.value = true; foodUploadProgress.value = 0; foodUploadMessage.value = '';
+  try {
+    const result = await uploadContentMedia(token.value, checked.valid, (progress) => { foodUploadProgress.value = progress; });
+    if (!foodForm.value.mediaAssets) foodForm.value.mediaAssets = [];
+    foodForm.value.mediaAssets.push(...result.uploadedFiles);
+    foodUploadedInForm.value.push(...result.uploadedFiles);
+    foodUploadFailures.value.push(...result.failedFiles);
+    if (!foodForm.value.mediaUrl && result.uploadedFiles[0]) foodForm.value.mediaUrl = result.uploadedFiles[0].url;
+    foodUploadMessage.value = foodUploadFailures.value.length ? `成功 ${result.uploadedCount} 个，失败 ${foodUploadFailures.value.length} 个` : `已上传 ${result.uploadedCount} 个资源`;
+  } catch (cause) { foodUploadMessage.value = cause instanceof Error ? cause.message : '资源上传失败'; }
+  finally { foodUploading.value = false; foodUploadProgress.value = 100; }
+}
+async function handleFoodFiles(event: Event) { const input = event.target as HTMLInputElement; const files = Array.from(input.files ?? []); input.value = ''; await uploadFoodFiles(files); }
+function removeFoodMedia(index: number) { const [asset] = (foodForm.value.mediaAssets ?? []).splice(index, 1); if (asset && !foodRemovedAssets.value.some((item) => item.objectName === asset.objectName)) foodRemovedAssets.value.push(asset); foodForm.value.mediaUrl = foodForm.value.mediaAssets?.[0]?.url ?? ''; }
 
 const trendOption = computed(() => {
   const points = dashboard.value?.trend ?? [];
@@ -463,9 +512,27 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
             <label>蛋白质 <input v-model.number="foodForm.protein" required min="0" step="0.01" type="number" aria-label="每 100g 蛋白质" /></label>
             <label>碳水 <input v-model.number="foodForm.carbs" required min="0" step="0.01" type="number" aria-label="每 100g 碳水" /></label>
             <label>脂肪 <input v-model.number="foodForm.fat" required min="0" step="0.01" type="number" aria-label="每 100g 脂肪" /></label>
+            <input v-model="foodForm.mediaUrl" type="url" placeholder="外部图片或视频地址（可选）" aria-label="食物媒体地址" />
+            <div class="media-uploader food-media-uploader">
+              <input ref="foodUploadInput" class="visually-hidden" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.mp4,.mov,.avi,.webm,.mkv" @change="handleFoodFiles" />
+              <button class="button" type="button" :disabled="foodUploading || (foodForm.mediaAssets?.length ?? 0) >= 10" @click="foodUploadInput?.click()">{{ foodUploading ? `上传中 ${foodUploadProgress}%` : '上传图片 / 视频' }}</button>
+              <span>单文件不超过 50MB，最多 10 个</span>
+              <progress v-if="foodUploading" class="media-progress" max="100" :value="foodUploadProgress" aria-label="食物媒体上传进度" />
+              <small v-if="foodUploadMessage">{{ foodUploadMessage }}</small>
+              <ul v-if="foodUploadFailures.length" class="upload-failures"><li v-for="failure in foodUploadFailures" :key="`${failure.fileName}-${failure.error}`">{{ failure.fileName }}：{{ failure.error }}</li></ul>
+            </div>
+            <div v-if="foodForm.mediaAssets?.length" class="content-media-list food-media-list">
+              <div v-for="(asset, index) in foodForm.mediaAssets" :key="asset.objectName" class="content-media-item">
+                <img v-if="asset.fileType.startsWith('image/')" :src="resolveMediaUrl(asset.url)" :alt="asset.fileName" />
+                <video v-else-if="asset.fileType.startsWith('video/')" :src="resolveMediaUrl(asset.url)" muted preload="metadata" controls />
+                <div v-else class="resource-type">{{ asset.fileName.split('.').pop()?.toUpperCase() }}</div>
+                <div><strong>{{ asset.fileName }}</strong><small>{{ (asset.fileSize / 1024 / 1024).toFixed(2) }} MB</small></div>
+                <button class="media-remove" type="button" aria-label="移除食物媒体" @click="removeFoodMedia(index)">×</button>
+              </div>
+            </div>
             <div class="form-actions"><button class="button primary" type="submit" :disabled="foodLoading">{{ foodLoading ? '保存中…' : foodEditingId ? '保存修改' : '创建食物' }}</button><button class="button" type="button" :disabled="foodLoading" @click="resetFoodForm">取消</button></div>
           </form>
-          <div class="table-wrap"><table><thead><tr><th>食物</th><th>份量</th><th>热量</th><th>蛋白质</th><th>碳水</th><th>脂肪</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in foodCatalogItems" :key="item.id"><td><strong>{{ item.name }}</strong><small>{{ item.id }}</small></td><td>{{ item.serving }}</td><td>{{ item.calories }} kcal</td><td>{{ item.protein }} g</td><td>{{ item.carbs }} g</td><td>{{ item.fat }} g</td><td>{{ item.source }}</td><td><span :class="['status', item.status === 'ACTIVE' ? 'active' : 'locked']">{{ item.status === 'ACTIVE' ? '已上架' : '已下架' }}</span></td><td class="content-actions"><button v-if="canManageCatalog" class="table-action" type="button" @click="editFood(item)">编辑</button><button v-if="canManageCatalog" class="table-action" type="button" @click="changeFoodStatus(item, item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')">{{ item.status === 'ACTIVE' ? '下架' : '上架' }}</button><button v-if="canManageCatalog" class="table-action danger" type="button" @click="removeFood(item)">删除</button></td></tr></tbody></table><div v-if="!foodCatalogItems.length" class="empty">暂无食物目录数据</div></div>
+          <div class="table-wrap"><table><thead><tr><th>食物</th><th>媒体</th><th>份量</th><th>热量</th><th>蛋白质</th><th>碳水</th><th>脂肪</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in foodCatalogItems" :key="item.id"><td><strong>{{ item.name }}</strong><small>{{ item.id }}</small></td><td><div class="catalog-resource-strip"><template v-for="(asset, index) in item.mediaAssets ?? []" :key="asset.objectName || index"><a :href="resolveMediaUrl(asset.url)" target="_blank" rel="noreferrer" :title="asset.fileName"><img v-if="asset.fileType.startsWith('image/') || isImageUrl(asset.url)" :src="resolveMediaUrl(asset.url)" :alt="asset.fileName" /><video v-else-if="asset.fileType.startsWith('video/') || isVideoUrl(asset.url)" :src="resolveMediaUrl(asset.url)" muted preload="metadata" /><span v-else>{{ asset.fileName.split('.').pop()?.toUpperCase() }}</span></a></template><a v-if="!item.mediaAssets?.length && item.mediaUrl" :href="resolveMediaUrl(item.mediaUrl)" target="_blank" rel="noreferrer" title="打开媒体"><img v-if="isImageUrl(item.mediaUrl)" :src="resolveMediaUrl(item.mediaUrl)" alt="食物媒体" /><video v-else-if="isVideoUrl(item.mediaUrl)" :src="resolveMediaUrl(item.mediaUrl)" muted preload="metadata" /><span v-else>打开</span></a><span v-if="!item.mediaAssets?.length && !item.mediaUrl" class="media-empty">暂无</span></div></td><td>{{ item.serving }}</td><td>{{ item.calories }} kcal</td><td>{{ item.protein }} g</td><td>{{ item.carbs }} g</td><td>{{ item.fat }} g</td><td>{{ item.source }}</td><td><span :class="['status', item.status === 'ACTIVE' ? 'active' : 'locked']">{{ item.status === 'ACTIVE' ? '已上架' : '已下架' }}</span></td><td class="content-actions"><button v-if="canManageCatalog" class="table-action" type="button" @click="editFood(item)">编辑</button><button v-if="canManageCatalog" class="table-action" type="button" @click="changeFoodStatus(item, item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')">{{ item.status === 'ACTIVE' ? '下架' : '上架' }}</button><button v-if="canManageCatalog" class="table-action danger" type="button" @click="removeFood(item)">删除</button></td></tr></tbody></table><div v-if="!foodCatalogItems.length" class="empty">暂无食物目录数据</div></div>
         </div>
         <div class="dashboard-grid nutrition-grid">
           <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION TREND</p><h2>饮食行为趋势</h2></div></div><DashboardChart :option="nutritionTrendOption" :empty="!nutrition?.trend.length" /></article>
@@ -507,7 +574,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
           <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" :disabled="contentLoading || contentUploading" @click="discardContentForm">取消</button></div>
         </form>
         <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无文章、视频或其他编辑内容</div></div>
-        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">{{ exerciseCatalogItems.length }} 个动作 · 数据库目录</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td>{{ item.resources.length }} 个<small>{{ item.resources.map((resource) => resource.viewLabel || resource.resourceType).join('、') || '暂无资源' }}</small></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
+        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">{{ exerciseCatalogItems.length }} 个动作 · 数据库目录</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源预览</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td><div class="catalog-resource-strip"><a v-for="resource in item.resources" :key="resource.id" :href="resolveMediaUrl(resource.resourceUrl)" target="_blank" rel="noreferrer" :title="resource.viewLabel || resource.resourceType"><img v-if="isImageUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" :alt="resource.viewLabel || resource.resourceType" /><video v-else-if="isVideoUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" muted preload="metadata" /><span v-else>{{ resource.resourceType }}</span></a><span v-if="!item.resources.length" class="media-empty">暂无资源</span></div></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
       </section>
     </main>
   </div>

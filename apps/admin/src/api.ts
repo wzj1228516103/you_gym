@@ -63,6 +63,7 @@ export type AnalyticsUser = {
 export type AppUser = { id: string; phone: string; nickname: string; gender: string | null; goal: string | null; experienceLevel: string | null; status: string; createdAt: string; lastLoginAt: string | null };
 export type WorkoutRecord = { id: string; userId: string; title: string; durationSeconds: number; totalSets: number; totalVolume: number; calories: number; completedAt: string };
 export type NutritionRecord = { id: string; userId: string; mealName: string; calories: number; proteinG: number; carbohydratesG: number; fatG: number; foodCount: number; recordedAt: string };
+export type CatalogMediaAsset = { url: string; objectName: string; fileName: string; fileSize: number; fileType: string; fileETag: string; expiresIn?: number };
 export type ExerciseCatalogItem = {
   id: string;
   nameZh: string;
@@ -94,6 +95,8 @@ export type FoodCatalogItem = {
   status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
   updatedAt: string;
+  mediaUrl: string | null;
+  mediaAssets: CatalogMediaAsset[];
 };
 
 export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE';
@@ -182,7 +185,14 @@ export type ContentItem = {
 };
 export type ContentInput = { title: string; contentType: ContentType; summary: string; body: string; mediaUrl: string; mediaAssets: ContentMediaAsset[]; anatomyNodeId: string };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+
+export function resolveMediaUrl(url: string | null | undefined) {
+  if (!url) return '';
+  if (/^(?:https?:|data:|blob:)/i.test(url)) return url;
+  const base = API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8080' : window.location.origin);
+  return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+}
 
 function authHeaders(token: string): HeadersInit {
   return token.startsWith('yg_admin_')
@@ -295,7 +305,7 @@ export function fetchAppNutrition(token: string, userId?: string) { const params
 export function fetchAdminExerciseCatalog(token: string, search?: string) { const params = new URLSearchParams({ limit: '100' }); if (search) params.set('search', search); return request<{ source: string; items: ExerciseCatalogItem[] }>(`/api/admin/v1/exercise-catalog?${params.toString()}`, token); }
 export function fetchAdminFoodCatalog(token: string, search?: string, status?: FoodCatalogItem['status'] | '') { const params = new URLSearchParams({ limit: '500' }); if (search) params.set('search', search); if (status) params.set('status', status); return request<{ items: FoodCatalogItem[] }>(`/api/admin/v1/food-catalog?${params.toString()}`, token); }
 
-export type FoodCatalogInput = { id?: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; status?: FoodCatalogItem['status'] };
+export type FoodCatalogInput = { id?: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; status?: FoodCatalogItem['status']; mediaUrl?: string; mediaAssets?: CatalogMediaAsset[] };
 export async function createFoodCatalogItem(token: string, input: FoodCatalogInput) {
   const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(response.status === 409 ? '食物 ID 已存在' : `创建食物失败（${response.status}）`);

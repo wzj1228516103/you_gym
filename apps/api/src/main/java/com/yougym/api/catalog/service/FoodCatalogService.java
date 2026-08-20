@@ -29,23 +29,31 @@ public class FoodCatalogService {
 
     public Map<String, Object> create(String requestedId, String name, String serving, BigDecimal calories,
                                       BigDecimal protein, BigDecimal carbs, BigDecimal fat, String source,
-                                      String requestedStatus) {
+                                      String requestedStatus, String mediaUrl, List<MediaAsset> mediaAssets) {
         String id = requestedId == null || requestedId.isBlank() ? "food-" + UUID.randomUUID() : requestedId.trim();
         validateId(id);
         String status = normalizeStatus(requestedStatus);
         if (mapper.exists(id)) throw new ResponseStatusException(HttpStatus.CONFLICT, "food id already exists");
         Instant now = Instant.now();
+        List<MediaAsset> assets = normalizeMedia(mediaAssets);
         mapper.insert(id, normalize(name, "name"), normalize(serving, "serving"), calories, protein, carbs, fat,
-                normalize(source, "source"), status, now);
+                normalize(source, "source"), status, primaryUrl(mediaUrl, assets), assets, now);
         return mapper.findById(id);
     }
 
     public Map<String, Object> update(String id, String name, String serving, BigDecimal calories,
                                       BigDecimal protein, BigDecimal carbs, BigDecimal fat, String source) {
+        return update(id, name, serving, calories, protein, carbs, fat, source, null, List.of());
+    }
+
+    public Map<String, Object> update(String id, String name, String serving, BigDecimal calories,
+                                      BigDecimal protein, BigDecimal carbs, BigDecimal fat, String source,
+                                      String mediaUrl, List<MediaAsset> mediaAssets) {
         requireExisting(id);
         Instant now = Instant.now();
+        List<MediaAsset> assets = normalizeMedia(mediaAssets);
         mapper.update(id, normalize(name, "name"), normalize(serving, "serving"), calories, protein, carbs, fat,
-                normalize(source, "source"), now);
+                normalize(source, "source"), primaryUrl(mediaUrl, assets), assets, now);
         return mapper.findById(id);
     }
 
@@ -81,4 +89,16 @@ public class FoodCatalogService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "id must contain only letters, numbers, _ or -");
         }
     }
+
+    private static List<MediaAsset> normalizeMedia(List<MediaAsset> mediaAssets) {
+        return mediaAssets == null ? List.of() : mediaAssets.stream().filter(asset -> asset != null && asset.url() != null && !asset.url().isBlank()).limit(10).toList();
+    }
+
+    private static String primaryUrl(String mediaUrl, List<MediaAsset> assets) {
+        if (mediaUrl != null && !mediaUrl.isBlank()) return mediaUrl.trim();
+        return assets.isEmpty() ? null : assets.get(0).url();
+    }
+
+    public record MediaAsset(String url, String objectName, String fileName, long fileSize,
+                             String fileType, String fileETag, Integer expiresIn) {}
 }
