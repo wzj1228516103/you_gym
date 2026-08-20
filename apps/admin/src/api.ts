@@ -63,6 +63,38 @@ export type AnalyticsUser = {
 export type AppUser = { id: string; phone: string; nickname: string; gender: string | null; goal: string | null; experienceLevel: string | null; status: string; createdAt: string; lastLoginAt: string | null };
 export type WorkoutRecord = { id: string; userId: string; title: string; durationSeconds: number; totalSets: number; totalVolume: number; calories: number; completedAt: string };
 export type NutritionRecord = { id: string; userId: string; mealName: string; calories: number; proteinG: number; carbohydratesG: number; fatG: number; foodCount: number; recordedAt: string };
+export type ExerciseCatalogItem = {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  targetMuscles: string[];
+  equipment: string | null;
+  location: string | null;
+  difficultyLevel: string | null;
+  recommendedReps: string | null;
+  recommendedSets: number | null;
+  restSecondsMin: number | null;
+  restSecondsMax: number | null;
+  angleViews: string[];
+  stepLabels: string[];
+  sourceImage: string | null;
+  sourcePanel: string | null;
+  sourceNote: string | null;
+  resources: { id: string; resourceType: string; viewLabel: string | null; resourceUrl: string; sortOrder: number; sourceImage: string }[];
+};
+export type FoodCatalogItem = {
+  id: string;
+  name: string;
+  serving: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  source: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'EMPLOYEE';
 
@@ -260,6 +292,29 @@ export function fetchAdminAnatomyNodes(token: string) {
 export function fetchAppUsers(token: string, search?: string) { const params = new URLSearchParams({ limit: '200' }); if (search) params.set('search', search); return request<{ items: AppUser[] }>(`/api/admin/v1/app-users?${params.toString()}`, token); }
 export function fetchAppWorkouts(token: string, userId?: string) { const params = new URLSearchParams({ limit: '200' }); if (userId) params.set('userId', userId); return request<{ items: WorkoutRecord[] }>(`/api/admin/v1/app-users/workouts?${params.toString()}`, token); }
 export function fetchAppNutrition(token: string, userId?: string) { const params = new URLSearchParams({ limit: '200' }); if (userId) params.set('userId', userId); return request<{ items: NutritionRecord[] }>(`/api/admin/v1/app-users/nutrition?${params.toString()}`, token); }
+export function fetchAdminExerciseCatalog(token: string, search?: string) { const params = new URLSearchParams({ limit: '100' }); if (search) params.set('search', search); return request<{ source: string; items: ExerciseCatalogItem[] }>(`/api/admin/v1/exercise-catalog?${params.toString()}`, token); }
+export function fetchAdminFoodCatalog(token: string, search?: string, status?: FoodCatalogItem['status'] | '') { const params = new URLSearchParams({ limit: '500' }); if (search) params.set('search', search); if (status) params.set('status', status); return request<{ items: FoodCatalogItem[] }>(`/api/admin/v1/food-catalog?${params.toString()}`, token); }
+
+export type FoodCatalogInput = { id?: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; status?: FoodCatalogItem['status'] };
+export async function createFoodCatalogItem(token: string, input: FoodCatalogInput) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  if (!response.ok) throw new Error(response.status === 409 ? '食物 ID 已存在' : `创建食物失败（${response.status}）`);
+  return response.json() as Promise<FoodCatalogItem>;
+}
+export async function updateFoodCatalogItem(token: string, id: string, input: FoodCatalogInput) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  if (!response.ok) throw new Error(`更新食物失败（${response.status}）`);
+  return response.json() as Promise<FoodCatalogItem>;
+}
+export async function updateFoodCatalogStatus(token: string, id: string, status: FoodCatalogItem['status']) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+  if (!response.ok) throw new Error(`更新食物状态失败（${response.status}）`);
+  return response.json() as Promise<FoodCatalogItem>;
+}
+export async function deleteFoodCatalogItem(token: string, id: string) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) });
+  if (!response.ok) throw new Error(`删除食物失败（${response.status}）`);
+}
 
 export function fetchContent(token: string, filters: { status?: ContentStatus; contentType?: ContentType; search?: string } = {}) {
   const params = new URLSearchParams({ limit: '200' });

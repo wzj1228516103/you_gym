@@ -11,8 +11,9 @@ import {
   createAdminAccount, createContent, downloadAnalyticsCsv, downloadAnalyticsUsersCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchAnalyticsUsers, fetchContent, fetchNutritionDashboard,
   deleteContent, deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
+  fetchAdminExerciseCatalog, fetchAdminFoodCatalog, createFoodCatalogItem, updateFoodCatalogItem, updateFoodCatalogStatus, deleteFoodCatalogItem,
   fetchAppNutrition, fetchAppUsers, fetchAppWorkouts,
-  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard, type AppUser, type WorkoutRecord, type NutritionRecord,
+  type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard, type AppUser, type WorkoutRecord, type NutritionRecord, type ExerciseCatalogItem, type FoodCatalogItem, type FoodCatalogInput,
   type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
 } from './api';
 
@@ -33,11 +34,19 @@ const adminAccounts = ref<AdminAccount[]>([]);
 const adminSessions = ref<AdminSessionView[]>([]);
 const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
+const exerciseCatalogItems = ref<ExerciseCatalogItem[]>([]);
 const nutrition = ref<NutritionDashboard | null>(null);
 const analyticsUsers = ref<AnalyticsUser[]>([]);
 const appUsers = ref<AppUser[]>([]);
 const appWorkouts = ref<WorkoutRecord[]>([]);
 const appNutrition = ref<NutritionRecord[]>([]);
+const foodCatalogItems = ref<FoodCatalogItem[]>([]);
+const foodSearch = ref('');
+const foodStatusFilter = ref<FoodCatalogItem['status'] | ''>('');
+const foodFormOpen = ref(false);
+const foodEditingId = ref<string | null>(null);
+const foodLoading = ref(false);
+const foodForm = ref<FoodCatalogInput>({ name: '', serving: '100g', calories: 0, protein: 0, carbs: 0, fat: 0, source: 'YOU GYM', status: 'ACTIVE' });
 const userSearch = ref('');
 const contentStatusFilter = ref<ContentStatus | ''>('');
 const contentTypeFilter = ref<ContentType | ''>('');
@@ -91,6 +100,7 @@ const canReadAudit = computed(() => permissions.value.includes('AUDIT_READ'));
 const canReadContent = computed(() => permissions.value.includes('CONTENT_READ'));
 const canManageContent = computed(() => permissions.value.includes('CONTENT_MANAGE'));
 const canReadAnalytics = computed(() => permissions.value.includes('ANALYTICS_READ'));
+const canManageCatalog = computed(() => permissions.value.includes('CATALOG_MANAGE'));
 const anatomyRegions = computed(() => anatomyNodes.value.filter((node) => node.level === 1));
 const roleLabel = computed(() => ({ SUPER_ADMIN: '超级管理员', ADMIN: '管理员', EMPLOYEE: '普通员工' }[role.value ?? 'EMPLOYEE']));
 const isSession = computed(() => token.value.startsWith('yg_admin_'));
@@ -110,7 +120,50 @@ const contentTypeLabel: Record<ContentType, string> = { ARTICLE: '文章', VIDEO
 const contentStatusLabel: Record<ContentStatus, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' };
 function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', mediaAssets: [], anatomyNodeId: '' }; }
 function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])], anatomyNodeId: item.anatomyNodeId ?? '' }; }
-async function refreshContent() { if (!canReadContent.value) return; contentItems.value = (await fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined })).items; }
+async function refreshContent() {
+  if (!canReadContent.value) return;
+  const search = contentSearch.value.trim() || undefined;
+  const [content, exercises] = await Promise.all([
+    fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search }),
+    fetchAdminExerciseCatalog(token.value, search),
+  ]);
+  contentItems.value = content.items;
+  exerciseCatalogItems.value = exercises.items;
+}
+async function refreshExerciseCatalog() { if (!canReadContent.value) return; exerciseCatalogItems.value = (await fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined)).items; }
+async function refreshFoodCatalog() { if (!canReadAnalytics.value) return; foodCatalogItems.value = (await fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined)).items; }
+
+function resetFoodForm() {
+  foodEditingId.value = null;
+  foodFormOpen.value = false;
+  foodForm.value = { name: '', serving: '100g', calories: 0, protein: 0, carbs: 0, fat: 0, source: 'YOU GYM', status: 'ACTIVE' };
+}
+function editFood(item: FoodCatalogItem) {
+  foodEditingId.value = item.id;
+  foodFormOpen.value = true;
+  foodForm.value = { id: item.id, name: item.name, serving: item.serving, calories: Number(item.calories), protein: Number(item.protein), carbs: Number(item.carbs), fat: Number(item.fat), source: item.source, status: item.status };
+}
+function startNewFood() { resetFoodForm(); foodFormOpen.value = true; }
+async function saveFood() {
+  foodLoading.value = true;
+  error.value = '';
+  try {
+    if (foodEditingId.value) await updateFoodCatalogItem(token.value, foodEditingId.value, foodForm.value);
+    else await createFoodCatalogItem(token.value, foodForm.value);
+    resetFoodForm();
+    await refreshFoodCatalog();
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : '保存食物失败'; }
+  finally { foodLoading.value = false; }
+}
+async function changeFoodStatus(item: FoodCatalogItem, status: FoodCatalogItem['status']) {
+  try { await updateFoodCatalogStatus(token.value, item.id, status); await refreshFoodCatalog(); }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : '更新食物状态失败'; }
+}
+async function removeFood(item: FoodCatalogItem) {
+  if (!window.confirm(`确认删除“${item.name}”吗？该食物将不再出现在 App 食物搜索中。`)) return;
+  try { await deleteFoodCatalogItem(token.value, item.id); await refreshFoodCatalog(); }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : '删除食物失败'; }
+}
 async function cleanupContentAssets(assets: ContentMediaAsset[]) {
   if (!assets.length) return true;
   const cleanup = await Promise.allSettled(assets.map((asset) => deleteContentMedia(token.value, asset.objectName)));
@@ -265,7 +318,7 @@ async function refresh() {
     role.value = session.role;
     permissions.value = session.permissions;
     const { from, to } = rangeBounds();
-    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextNutrition, nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition] = await Promise.all([
+    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextExercises, nextNutrition, nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition, nextFoods] = await Promise.all([
       fetchAnalyticsDashboard(token.value, from, to),
       fetchAnalyticsSummary(token.value, from, to),
       fetchAnalyticsEvents(token.value, selectedEvent.value || undefined),
@@ -274,11 +327,13 @@ async function refresh() {
       session.permissions.includes('ADMIN_ACCOUNT_MANAGE') ? fetchAdminSessions(token.value) : Promise.resolve({ items: [] as AdminSessionView[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
       session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
+      session.permissions.includes('CONTENT_READ') ? fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined) : Promise.resolve({ source: 'exercise_catalog', items: [] as ExerciseCatalogItem[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
       session.permissions.includes('ANALYTICS_READ') ? fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined) : Promise.resolve({ items: [] as AnalyticsUser[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppUsers(token.value) : Promise.resolve({ items: [] as AppUser[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppWorkouts(token.value) : Promise.resolve({ items: [] as WorkoutRecord[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppNutrition(token.value) : Promise.resolve({ items: [] as NutritionRecord[] }),
+      session.permissions.includes('ANALYTICS_READ') ? fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined) : Promise.resolve({ items: [] as FoodCatalogItem[] }),
     ]);
     dashboard.value = nextDashboard;
     summary.value = nextSummary;
@@ -288,15 +343,17 @@ async function refresh() {
     adminSessions.value = nextSessions.items;
     anatomyNodes.value = nextAnatomy.items;
     contentItems.value = nextContent.items;
+    exerciseCatalogItems.value = nextExercises.items;
     nutrition.value = nextNutrition;
     analyticsUsers.value = nextUsers.items;
     appUsers.value = nextAppUsers.items;
     appWorkouts.value = nextAppWorkouts.items;
     appNutrition.value = nextAppNutrition.items;
+    foodCatalogItems.value = nextFoods.items;
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = [];
+    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = [];
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { loading.value = false; }
 }
@@ -311,7 +368,7 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; } }
+async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
@@ -394,6 +451,22 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
           <article class="stat"><span>食物选择</span><strong>{{ nutrition?.kpis.itemSelections ?? 0 }}</strong><small>nutrition_item_selected</small></article>
           <article class="stat"><span>餐次记录</span><strong>{{ nutrition?.kpis.mealRecords ?? 0 }}</strong><small>nutrition_meal_recorded</small></article>
         </div>
+        <div class="panel catalog-panel">
+          <div class="panel-heading"><div><p class="eyebrow">FOOD CATALOG</p><h2>食物目录</h2></div><div class="content-actions"><span class="panel-note">{{ foodCatalogItems.length }} 种食物</span><button v-if="canManageCatalog" class="button primary" type="button" @click="startNewFood">新增食物</button></div></div>
+          <div class="content-toolbar catalog-toolbar"><input v-model="foodSearch" placeholder="搜索食物或数据来源" aria-label="搜索食物" @keyup.enter="refreshFoodCatalog" /><select v-model="foodStatusFilter" aria-label="按食物状态筛选" @change="refreshFoodCatalog"><option value="">全部状态</option><option value="ACTIVE">已上架</option><option value="INACTIVE">已下架</option></select><button class="button" type="button" @click="refreshFoodCatalog">查询</button></div>
+          <form v-if="foodFormOpen && canManageCatalog" class="food-form" aria-label="食物目录表单" @submit.prevent="saveFood">
+            <input v-model="foodForm.name" required maxlength="120" placeholder="食物名称" aria-label="食物名称" />
+            <input v-model="foodForm.id" maxlength="64" :disabled="Boolean(foodEditingId)" placeholder="食物 ID（可选）" aria-label="食物 ID" />
+            <input v-model="foodForm.serving" required maxlength="32" placeholder="份量，如 100g" aria-label="份量" />
+            <input v-model="foodForm.source" required maxlength="80" placeholder="数据来源" aria-label="数据来源" />
+            <label>热量 <input v-model.number="foodForm.calories" required min="0" step="0.01" type="number" aria-label="每 100g 热量" /></label>
+            <label>蛋白质 <input v-model.number="foodForm.protein" required min="0" step="0.01" type="number" aria-label="每 100g 蛋白质" /></label>
+            <label>碳水 <input v-model.number="foodForm.carbs" required min="0" step="0.01" type="number" aria-label="每 100g 碳水" /></label>
+            <label>脂肪 <input v-model.number="foodForm.fat" required min="0" step="0.01" type="number" aria-label="每 100g 脂肪" /></label>
+            <div class="form-actions"><button class="button primary" type="submit" :disabled="foodLoading">{{ foodLoading ? '保存中…' : foodEditingId ? '保存修改' : '创建食物' }}</button><button class="button" type="button" :disabled="foodLoading" @click="resetFoodForm">取消</button></div>
+          </form>
+          <div class="table-wrap"><table><thead><tr><th>食物</th><th>份量</th><th>热量</th><th>蛋白质</th><th>碳水</th><th>脂肪</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in foodCatalogItems" :key="item.id"><td><strong>{{ item.name }}</strong><small>{{ item.id }}</small></td><td>{{ item.serving }}</td><td>{{ item.calories }} kcal</td><td>{{ item.protein }} g</td><td>{{ item.carbs }} g</td><td>{{ item.fat }} g</td><td>{{ item.source }}</td><td><span :class="['status', item.status === 'ACTIVE' ? 'active' : 'locked']">{{ item.status === 'ACTIVE' ? '已上架' : '已下架' }}</span></td><td class="content-actions"><button v-if="canManageCatalog" class="table-action" type="button" @click="editFood(item)">编辑</button><button v-if="canManageCatalog" class="table-action" type="button" @click="changeFoodStatus(item, item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')">{{ item.status === 'ACTIVE' ? '下架' : '上架' }}</button><button v-if="canManageCatalog" class="table-action danger" type="button" @click="removeFood(item)">删除</button></td></tr></tbody></table><div v-if="!foodCatalogItems.length" class="empty">暂无食物目录数据</div></div>
+        </div>
         <div class="dashboard-grid nutrition-grid">
           <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION TREND</p><h2>饮食行为趋势</h2></div></div><DashboardChart :option="nutritionTrendOption" :empty="!nutrition?.trend.length" /></article>
           <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">MEAL DISTRIBUTION</p><h2>餐次记录分布</h2></div></div><div v-if="nutrition?.mealDistribution.length" class="summary-list"><div v-for="item in nutrition.mealDistribution" :key="item.name" class="summary-row"><div class="summary-name"><strong>{{ item.name }}</strong><span>{{ item.uniqueUsers }} 个匿名用户</span></div><strong>{{ item.eventCount }}</strong></div></div><div v-else class="empty">暂无餐次记录</div></article>
@@ -433,7 +506,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
           <textarea v-model="contentForm.body" rows="5" placeholder="正文或播放说明" aria-label="内容正文" />
           <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" :disabled="contentLoading || contentUploading" @click="discardContentForm">取消</button></div>
         </form>
-        <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无内容，请先创建草稿</div></div>
+        <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无文章、视频或其他编辑内容</div></div>
+        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">{{ exerciseCatalogItems.length }} 个动作 · 数据库目录</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td>{{ item.resources.length }} 个<small>{{ item.resources.map((resource) => resource.viewLabel || resource.resourceType).join('、') || '暂无资源' }}</small></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
       </section>
     </main>
   </div>

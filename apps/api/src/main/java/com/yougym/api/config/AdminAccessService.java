@@ -65,8 +65,9 @@ public class AdminAccessService {
     public Set<AdminPermission> permissions(AdminRole role) {
         if (role == AdminRole.SUPER_ADMIN) return EnumSet.allOf(AdminPermission.class);
         if (role == AdminRole.ADMIN) return EnumSet.of(AdminPermission.ANALYTICS_READ, AdminPermission.ANALYTICS_EXPORT,
-                AdminPermission.CONTENT_READ, AdminPermission.CONTENT_MANAGE);
-        return EnumSet.of(AdminPermission.ANALYTICS_READ, AdminPermission.CONTENT_READ);
+                AdminPermission.CONTENT_READ, AdminPermission.CONTENT_MANAGE,
+                AdminPermission.CATALOG_READ, AdminPermission.CATALOG_MANAGE);
+        return EnumSet.of(AdminPermission.ANALYTICS_READ, AdminPermission.CONTENT_READ, AdminPermission.CATALOG_READ);
     }
 
     private static boolean same(String left, String right) {
