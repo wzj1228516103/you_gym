@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -40,18 +41,21 @@ public class ExerciseDatasetImportRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
+        List<DatasetExercise> dataset = loadDataset();
         if (isImported()) {
+            transactionTemplate.executeWithoutResult(status -> ensureDatasetResources(dataset));
             log.info("Exercises Dataset is already imported");
             return;
         }
 
-        List<DatasetExercise> dataset;
-        try (InputStream input = new ClassPathResource("data/exercises-dataset.json").getInputStream()) {
-            dataset = objectMapper.readValue(input, new TypeReference<>() {});
-        }
-
         transactionTemplate.executeWithoutResult(status -> importDataset(dataset));
         log.info("Imported {} Exercises Dataset records", dataset.size());
+    }
+
+    private List<DatasetExercise> loadDataset() throws Exception {
+        try (InputStream input = new ClassPathResource("data/exercises-dataset.json").getInputStream()) {
+            return objectMapper.readValue(input, new TypeReference<>() {});
+        }
     }
 
     private boolean isImported() {
@@ -113,6 +117,30 @@ public class ExerciseDatasetImportRunner implements ApplicationRunner {
 
         jdbc.update("INSERT INTO exercise_dataset_import (dataset_key, source_url, record_count) VALUES (?, ?, ?)",
                 DATASET_KEY, DATASET_SOURCE, dataset.size());
+    }
+
+    private void ensureDatasetResources(List<DatasetExercise> dataset) {
+        Set<String> exerciseIds = new HashSet<>(jdbc.queryForList(
+                "SELECT id FROM exercise_catalog WHERE id LIKE 'ds-%'", String.class));
+        Set<String> resourceIds = new HashSet<>(jdbc.queryForList(
+                "SELECT id FROM exercise_resource WHERE id LIKE 'res-ds-%'", String.class));
+        int repaired = 0;
+        for (DatasetExercise item : dataset) {
+            String exerciseId = "ds-" + item.id();
+            if (!exerciseIds.contains(exerciseId)) continue;
+            repaired += ensureResource(exerciseId, "THUMBNAIL_IMAGE", "Dataset thumbnail", rawAssetUrl(item.image()), 10, resourceIds);
+            repaired += ensureResource(exerciseId, "ANIMATION_GIF", "Dataset animation", rawAssetUrl(item.gifUrl()), 20, resourceIds);
+        }
+        if (repaired > 0) log.info("Repaired {} Exercises Dataset media resources", repaired);
+    }
+
+    private int ensureResource(String exerciseId, String resourceType, String viewLabel, String url, int sortOrder, Set<String> resourceIds) {
+        if (url == null || url.isBlank()) return 0;
+        String resourceId = "res-" + exerciseId + "-" + resourceType.toLowerCase(Locale.ROOT);
+        if (resourceIds.contains(resourceId)) return 0;
+        insertResource(exerciseId, resourceType, viewLabel, url, sortOrder);
+        resourceIds.add(resourceId);
+        return 1;
     }
 
     private void insertResource(String exerciseId, String resourceType, String viewLabel, String url, int sortOrder) {

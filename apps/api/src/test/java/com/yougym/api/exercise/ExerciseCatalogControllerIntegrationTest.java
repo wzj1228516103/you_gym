@@ -46,7 +46,9 @@ class ExerciseCatalogControllerIntegrationTest {
                 .andExpect(jsonPath("$.total", is(1)))
                 .andExpect(jsonPath("$.items", hasSize(1)))
                 .andExpect(jsonPath("$.items[0].id", is("ds-0001")))
-                .andExpect(jsonPath("$.items[0].resources", hasSize(2)));
+                .andExpect(jsonPath("$.items[0].resources", hasSize(2)))
+                .andExpect(jsonPath("$.items[0].resources[0].resourceType", is("THUMBNAIL_IMAGE")))
+                .andExpect(jsonPath("$.items[0].resources[1].resourceType", is("ANIMATION_GIF")));
 
         mockMvc.perform(get("/api/v1/exercises/ds-0001"))
                 .andExpect(status().isOk())
@@ -55,6 +57,8 @@ class ExerciseCatalogControllerIntegrationTest {
                 .andExpect(jsonPath("$.datasetDetail.instructions.en").isNotEmpty())
                 .andExpect(jsonPath("$.datasetDetail.instructionSteps.en", hasSize(5)))
                 .andExpect(jsonPath("$.resources[0].resourceUrl", endsWith("images/0001-2gPfomN.jpg")))
-                .andExpect(jsonPath("$.resources[1].resourceUrl", endsWith("videos/0001-2gPfomN.gif")));
+                .andExpect(jsonPath("$.resources[0].resourceType", is("THUMBNAIL_IMAGE")))
+                .andExpect(jsonPath("$.resources[1].resourceUrl", endsWith("videos/0001-2gPfomN.gif")))
+                .andExpect(jsonPath("$.resources[1].resourceType", is("ANIMATION_GIF")));
     }
 }

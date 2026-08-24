@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AlertTriangle, Bookmark, Check, Dumbbell, Play, ShieldCheck, Star } from 'lucide-react-native';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
 import { useAppState } from '../../state/AppState';
 import { serverAnatomyId } from '../../data/anatomyMerge';
@@ -23,16 +23,22 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
   const [saved, setSaved] = useState(false);
   const [content, setContent] = useState<ExerciseContent | null>(null);
   const [catalogExercise, setCatalogExercise] = useState<import('../../services/api').ExerciseCatalogItem | null>(null);
+  const [selectedResourceUrl, setSelectedResourceUrl] = useState<string | null>(null);
   const added = todayExerciseIds.includes(exercise.id);
   const catalogMediaUrl = exercise.mediaUrl?.startsWith('http') ? exercise.mediaUrl : exercise.mediaUrl ? `${API_BASE_URL}${exercise.mediaUrl}` : undefined;
+  const mediaResources = exercise.mediaResources ?? [];
   const displayName = translateExerciseName(catalogExercise?.nameZh ?? exercise.name);
   const displaySteps = catalogExercise?.datasetDetail?.instructionSteps?.zh?.length ? catalogExercise.datasetDetail.instructionSteps.zh : exercise.steps;
+  const activeMediaUrl = selectedResourceUrl ?? content?.mediaUrl ?? catalogMediaUrl;
 
   useEffect(() => {
     trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: displayName }, { screenId: 'exercise_detail' });
     let active = true;
     void fetchExercise(exercise.sourceId ?? exercise.id).then((item) => {
-      if (active) setCatalogExercise(item);
+      if (!active) return;
+      setCatalogExercise(item);
+      const firstResource = item.resources.find((resource) => resource.resourceType === 'THUMBNAIL_IMAGE') ?? item.resources[0];
+      if (firstResource) setSelectedResourceUrl(firstResource.resourceUrl);
     }).catch(() => { if (active) setCatalogExercise(null); });
     void fetchPublishedExerciseContent(displayName, nodeId ? serverAnatomyId(nodeId) : undefined).then(({ items }) => {
       if (!active) return;
@@ -53,10 +59,21 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
       <View style={styles.metaRow}><Tag>{exercise.target}</Tag><Tag>{exercise.equipment}</Tag><Tag>{exercise.location}</Tag></View>
 
       <View style={styles.media}>
-        {content?.mediaUrl || catalogMediaUrl ? <Image source={{ uri: content?.mediaUrl || catalogMediaUrl }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />}
-        <View style={styles.playButton}><Play size={24} color={colors.text} fill={colors.text} /></View>
-        <Text style={styles.mediaNote}>{content ? `${content.contentType === 'VIDEO' ? '视频' : content.contentType === 'GIF' ? 'GIF' : content.contentType === 'MODEL_3D' ? '3D 模型' : '训练内容'} · 已发布` : '动作媒体待授权 · 当前显示训练占位'}</Text>
+        {activeMediaUrl ? <Image source={{ uri: activeMediaUrl }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />}
+        {selectedResourceUrl?.toLowerCase().includes('.gif') ? <View style={styles.playButton}><Play size={24} color={colors.text} fill={colors.text} /></View> : null}
+        <Text style={styles.mediaNote}>{selectedResourceUrl?.toLowerCase().includes('.gif') ? '动作演示 GIF · 自动播放' : content ? `${content.contentType === 'VIDEO' ? '视频' : content.contentType === 'GIF' ? 'GIF' : content.contentType === 'MODEL_3D' ? '3D 模型' : '训练内容'} · 已发布` : '动作图片'}</Text>
       </View>
+      {mediaResources.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaResourceRow}>
+        {mediaResources.map((resource) => {
+          const resourceUrl = resource.resourceUrl.startsWith('http') ? resource.resourceUrl : `${API_BASE_URL}${resource.resourceUrl}`;
+          const selected = selectedResourceUrl === resource.resourceUrl || selectedResourceUrl === resourceUrl;
+          const isGif = resource.resourceType === 'ANIMATION_GIF' || resource.resourceUrl.toLowerCase().includes('.gif');
+          return <Pressable key={resource.id} accessibilityRole="button" accessibilityLabel={`查看${isGif ? '动作演示 GIF' : '动作图片'}`} onPress={() => setSelectedResourceUrl(resourceUrl)} style={[styles.mediaResource, selected && styles.mediaResourceSelected]}>
+            <Image source={{ uri: resourceUrl }} resizeMode="cover" style={styles.mediaResourceImage} />
+            <Text style={styles.mediaResourceLabel}>{isGif ? 'GIF 演示' : '动作图片'}</Text>
+          </Pressable>;
+        })}
+      </ScrollView> : null}
 
       <View style={styles.ratingRow}>{exercise.rating > 0 ? <><Star size={16} color={colors.warning} fill={colors.warning} /><Text style={styles.rating}>{exercise.rating}</Text></> : <Text style={styles.rating}>数据库动作目录</Text>}<Text style={styles.ratingMeta}>{exercise.sourceId ? '来自动作目录' : '本地兼容数据'}</Text></View>
 
@@ -96,6 +113,11 @@ const styles = StyleSheet.create({
   mediaImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   playButton: { position: 'absolute', width: 56, height: 56, borderRadius: radius.pill, backgroundColor: 'rgba(0,0,0,0.72)', borderWidth: 1, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   mediaNote: { ...typography.caption, color: colors.textTertiary, position: 'absolute', left: spacing.x3, bottom: spacing.x3 },
+  mediaResourceRow: { gap: spacing.x2, paddingTop: spacing.x3 },
+  mediaResource: { width: 92, height: 72, borderRadius: radius.control, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.control, overflow: 'hidden' },
+  mediaResourceSelected: { borderColor: colors.primary, borderWidth: 2 },
+  mediaResourceImage: { width: '100%', height: '100%' },
+  mediaResourceLabel: { position: 'absolute', left: 4, right: 4, bottom: 4, ...typography.eyebrow, color: colors.text, textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.62)', paddingVertical: 2 },
   ratingRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   rating: { ...typography.body, color: colors.warning, fontWeight: '700' },
   ratingMeta: { ...typography.caption, color: colors.textSecondary, marginLeft: 'auto' },

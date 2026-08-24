@@ -112,6 +112,12 @@ function toExercise(item: import('../services/api').ExerciseCatalogItem): Exerci
     mistakes: [],
     safety: item.sourceNote ?? '请根据自身情况选择可控重量，出现疼痛时停止动作。',
     mediaUrl: resource?.resourceUrl,
+    mediaResources: item.resources.map((candidate) => ({
+      id: candidate.id,
+      resourceType: candidate.resourceType,
+      viewLabel: candidate.viewLabel,
+      resourceUrl: candidate.resourceUrl,
+    })),
     sourceNote: item.sourceNote ?? undefined,
   };
 }

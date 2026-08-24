@@ -35,6 +35,7 @@ export type Exercise = {
   safety: string;
   sourceId?: string;
   mediaUrl?: string;
+  mediaResources?: { id: string; resourceType: string; viewLabel: string; resourceUrl: string }[];
   sourceNote?: string;
 };
 
