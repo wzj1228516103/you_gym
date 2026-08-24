@@ -30,9 +30,9 @@ public class ExerciseCatalogAdminController {
                                     @RequestParam(defaultValue = "100") int limit,
                                     HttpServletRequest request) {
         var principal = access.authorize(request, AdminPermission.CONTENT_READ);
-        var items = service.find(search, null, Math.max(1, Math.min(limit, 100)));
+        var items = service.find(search, null, Math.max(1, Math.min(limit, 2000)));
         audit.record(principal, "EXERCISE_CATALOG_VIEWED", "exercise_catalog", null, request,
                 Map.of("count", items.size()));
-        return Map.of("source", "exercise_catalog", "items", items);
+        return Map.of("source", "exercise_catalog", "items", items, "total", service.count(search, null));
     }
 }

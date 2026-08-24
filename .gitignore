@@ -13,6 +13,7 @@
 # Local test artifacts
 .playwright-cli/
 output/
+tmp/
 
 # Environment and credentials
 .env

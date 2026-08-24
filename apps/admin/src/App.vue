@@ -36,6 +36,7 @@ const adminSessions = ref<AdminSessionView[]>([]);
 const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
 const exerciseCatalogItems = ref<ExerciseCatalogItem[]>([]);
+const exerciseCatalogTotal = ref(0);
 const nutrition = ref<NutritionDashboard | null>(null);
 const analyticsUsers = ref<AnalyticsUser[]>([]);
 const appUsers = ref<AppUser[]>([]);
@@ -139,8 +140,14 @@ async function refreshContent() {
   ]);
   contentItems.value = content.items;
   exerciseCatalogItems.value = exercises.items;
+  exerciseCatalogTotal.value = exercises.total;
 }
-async function refreshExerciseCatalog() { if (!canReadContent.value) return; exerciseCatalogItems.value = (await fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined)).items; }
+async function refreshExerciseCatalog() {
+  if (!canReadContent.value) return;
+  const result = await fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined);
+  exerciseCatalogItems.value = result.items;
+  exerciseCatalogTotal.value = result.total;
+}
 async function refreshFoodCatalog() { if (!canReadAnalytics.value) return; foodCatalogItems.value = (await fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined)).items; }
 
 function resetFoodForm() {
@@ -376,7 +383,7 @@ async function refresh() {
       session.permissions.includes('ADMIN_ACCOUNT_MANAGE') ? fetchAdminSessions(token.value) : Promise.resolve({ items: [] as AdminSessionView[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
       session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
-      session.permissions.includes('CONTENT_READ') ? fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined) : Promise.resolve({ source: 'exercise_catalog', items: [] as ExerciseCatalogItem[] }),
+      session.permissions.includes('CONTENT_READ') ? fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined) : Promise.resolve({ source: 'exercise_catalog', total: 0, items: [] as ExerciseCatalogItem[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
       session.permissions.includes('ANALYTICS_READ') ? fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined) : Promise.resolve({ items: [] as AnalyticsUser[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppUsers(token.value) : Promise.resolve({ items: [] as AppUser[] }),
@@ -393,6 +400,7 @@ async function refresh() {
     anatomyNodes.value = nextAnatomy.items;
     contentItems.value = nextContent.items;
     exerciseCatalogItems.value = nextExercises.items;
+    exerciseCatalogTotal.value = nextExercises.total;
     nutrition.value = nextNutrition;
     analyticsUsers.value = nextUsers.items;
     appUsers.value = nextAppUsers.items;
@@ -402,7 +410,7 @@ async function refresh() {
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = [];
+    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = [];
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { loading.value = false; }
 }
@@ -417,7 +425,7 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; } }
+async function logout() { const current = token.value; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
@@ -574,7 +582,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
           <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" :disabled="contentLoading || contentUploading" @click="discardContentForm">取消</button></div>
         </form>
         <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无文章、视频或其他编辑内容</div></div>
-        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">{{ exerciseCatalogItems.length }} 个动作 · 数据库目录</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源预览</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td><div class="catalog-resource-strip"><a v-for="resource in item.resources" :key="resource.id" :href="resolveMediaUrl(resource.resourceUrl)" target="_blank" rel="noreferrer" :title="resource.viewLabel || resource.resourceType"><img v-if="isImageUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" :alt="resource.viewLabel || resource.resourceType" /><video v-else-if="isVideoUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" muted preload="metadata" /><span v-else>{{ resource.resourceType }}</span></a><span v-if="!item.resources.length" class="media-empty">暂无资源</span></div></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
+        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">数据库共 {{ exerciseCatalogTotal }} 个动作 · 当前显示 {{ exerciseCatalogItems.length }} 个</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源预览</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td><div class="catalog-resource-strip"><a v-for="resource in item.resources" :key="resource.id" :href="resolveMediaUrl(resource.resourceUrl)" target="_blank" rel="noreferrer" :title="resource.viewLabel || resource.resourceType"><img v-if="isImageUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" :alt="resource.viewLabel || resource.resourceType" loading="lazy" /><video v-else-if="isVideoUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" muted preload="none" /><span v-else>{{ resource.resourceType }}</span></a><span v-if="!item.resources.length" class="media-empty">暂无资源</span></div></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
       </section>
     </main>
   </div>

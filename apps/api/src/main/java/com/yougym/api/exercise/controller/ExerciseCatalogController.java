@@ -18,7 +18,10 @@ public class ExerciseCatalogController {
     public Map<String, Object> list(@RequestParam(required = false) String search,
                                     @RequestParam(required = false) String equipment,
                                     @RequestParam(defaultValue = "50") int limit) {
-        return Map.of("items", service.find(search, equipment, limit), "source", "reference-images-v1");
+        return Map.of(
+                "items", service.find(search, equipment, limit),
+                "total", service.count(search, equipment),
+                "source", "reference-images-v1");
     }
 
     @GetMapping("/{id}")

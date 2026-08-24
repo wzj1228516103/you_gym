@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,6 +25,7 @@ class ExerciseCatalogControllerIntegrationTest {
         mockMvc.perform(get("/api/v1/exercises").param("limit", "50"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.source", is("reference-images-v1")))
+                .andExpect(jsonPath("$.total", greaterThanOrEqualTo(1324)))
                 .andExpect(jsonPath("$.items", hasSize(greaterThanOrEqualTo(17))));
         mockMvc.perform(get("/api/v1/exercises/ex-009-squat"))
                 .andExpect(status().isOk())
@@ -33,5 +35,26 @@ class ExerciseCatalogControllerIntegrationTest {
         mockMvc.perform(get("/exercise-assets/cards/01-barbell-bench-press.png"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("image/png"));
+    }
+
+    @Test
+    void importsExercisesDatasetMetadataInstructionsAndMedia() throws Exception {
+        mockMvc.perform(get("/api/v1/exercises")
+                        .param("search", "3/4 sit-up")
+                .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total", is(1)))
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is("ds-0001")))
+                .andExpect(jsonPath("$.items[0].resources", hasSize(2)));
+
+        mockMvc.perform(get("/api/v1/exercises/ds-0001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nameEn", is("3/4 sit-up")))
+                .andExpect(jsonPath("$.datasetDetail.category", is("waist")))
+                .andExpect(jsonPath("$.datasetDetail.instructions.en").isNotEmpty())
+                .andExpect(jsonPath("$.datasetDetail.instructionSteps.en", hasSize(5)))
+                .andExpect(jsonPath("$.resources[0].resourceUrl", endsWith("images/0001-2gPfomN.jpg")))
+                .andExpect(jsonPath("$.resources[1].resourceUrl", endsWith("videos/0001-2gPfomN.gif")));
     }
 }
