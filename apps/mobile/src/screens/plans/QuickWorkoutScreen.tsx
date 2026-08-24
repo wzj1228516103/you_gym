@@ -23,22 +23,22 @@ const anatomyAssets: Record<Gender, number> = {
   female: require('../../../assets/anatomy/anatomy-female-front-back.png'),
 };
 
-const targetModuleAssets: Record<Gender, Record<string, number>> = {
+const targetModuleAssets: Record<Gender, Record<string, number[]>> = {
   male: {
-    胸部: require('../../../assets/anatomy/modules/pectoralis-major.png'),
-    背部: require('../../../assets/anatomy/modules/latissimus-dorsi.png'),
-    肩部: require('../../../assets/anatomy/modules/deltoid-middle.png'),
-    手臂: require('../../../assets/anatomy/modules/biceps-brachii.png'),
-    核心: require('../../../assets/anatomy/modules/rectus-abdominis.png'),
-    臀腿: require('../../../assets/anatomy/modules/gluteus-maximus.png'),
+    胸部: [require('../../../assets/anatomy/modules/pectoralis-major.png'), require('../../../assets/anatomy/modules/pectoralis-major-lower.png')],
+    背部: [require('../../../assets/anatomy/modules/latissimus-dorsi.png'), require('../../../assets/anatomy/modules/trapezius.png'), require('../../../assets/anatomy/modules/erector-spinae.png')],
+    肩部: [require('../../../assets/anatomy/modules/deltoid-anterior.png'), require('../../../assets/anatomy/modules/deltoid-middle.png'), require('../../../assets/anatomy/modules/deltoid-posterior.png')],
+    手臂: [require('../../../assets/anatomy/modules/biceps-brachii.png'), require('../../../assets/anatomy/modules/triceps-brachii.png'), require('../../../assets/anatomy/modules/forearm-muscles.png')],
+    核心: [require('../../../assets/anatomy/modules/rectus-abdominis.png'), require('../../../assets/anatomy/modules/external-oblique.png'), require('../../../assets/anatomy/modules/hip-flexors.png')],
+    臀腿: [require('../../../assets/anatomy/modules/gluteus-maximus.png'), require('../../../assets/anatomy/modules/gluteus-medius.png'), require('../../../assets/anatomy/modules/quadriceps.png'), require('../../../assets/anatomy/modules/hamstrings.png'), require('../../../assets/anatomy/modules/gastrocnemius.png')],
   },
   female: {
-    胸部: require('../../../assets/anatomy/female-modules/pectoralis-major.png'),
-    背部: require('../../../assets/anatomy/female-modules/latissimus-dorsi.png'),
-    肩部: require('../../../assets/anatomy/female-modules/deltoid-middle.png'),
-    手臂: require('../../../assets/anatomy/female-modules/biceps-brachii.png'),
-    核心: require('../../../assets/anatomy/female-modules/rectus-abdominis.png'),
-    臀腿: require('../../../assets/anatomy/female-modules/gluteus-maximus.png'),
+    胸部: [require('../../../assets/anatomy/female-modules/pectoralis-major.png'), require('../../../assets/anatomy/female-modules/pectoralis-major-lower.png')],
+    背部: [require('../../../assets/anatomy/female-modules/latissimus-dorsi.png'), require('../../../assets/anatomy/female-modules/trapezius.png'), require('../../../assets/anatomy/female-modules/erector-spinae.png')],
+    肩部: [require('../../../assets/anatomy/female-modules/deltoid-anterior.png'), require('../../../assets/anatomy/female-modules/deltoid-middle.png'), require('../../../assets/anatomy/female-modules/deltoid-posterior.png')],
+    手臂: [require('../../../assets/anatomy/female-modules/biceps-brachii.png'), require('../../../assets/anatomy/female-modules/triceps-brachii.png'), require('../../../assets/anatomy/female-modules/forearm-muscles.png')],
+    核心: [require('../../../assets/anatomy/female-modules/rectus-abdominis.png'), require('../../../assets/anatomy/female-modules/external-oblique.png'), require('../../../assets/anatomy/female-modules/hip-flexors.png')],
+    臀腿: [require('../../../assets/anatomy/female-modules/gluteus-maximus.png'), require('../../../assets/anatomy/female-modules/gluteus-medius.png'), require('../../../assets/anatomy/female-modules/quadriceps.png'), require('../../../assets/anatomy/female-modules/hamstrings.png'), require('../../../assets/anatomy/female-modules/gastrocnemius.png')],
   },
 };
 
@@ -55,6 +55,7 @@ export function QuickWorkoutScreen({ navigation }: Props) {
     () => exercises.filter((exercise) => selectedIds.includes(exercise.id)),
     [selectedIds],
   );
+  const highlightedModules = targetModuleAssets[gender][target] ?? [];
   const recommendedExercises = useMemo(() => {
     const matchers: Record<string, string[]> = {
       胸部: ['胸', '三角肌'],
@@ -130,16 +131,11 @@ export function QuickWorkoutScreen({ navigation }: Props) {
           <View style={styles.targetStage}>
             <View style={styles.modelWrap}>
               <Image source={anatomyAssets[gender]} resizeMode="contain" style={styles.modelImage} accessibilityLabel={`${gender === 'male' ? '男性' : '女性'}正面与背面肌肉图`} />
-              <Image
-                source={targetModuleAssets[gender][target]}
-                resizeMode="contain"
-                tintColor={colors.primary}
-                style={styles.moduleOverlay}
-                accessibilityLabel={`${target}目标肌群高亮`}
-              />
+              {highlightedModules.map((asset, index) => <Image key={`${target}-${gender}-${index}`} source={asset} resizeMode="contain" tintColor={colors.primary} style={styles.moduleOverlay} accessibilityLabel={`${target}目标肌群高亮`} />)}
             </View>
             <View style={styles.targetPath}><Text style={styles.targetPathLabel}>本次目标</Text><Text style={styles.targetPathValue}>{target} · 主要肌群</Text></View>
           </View>
+          <View style={styles.highlightStatus}><View style={styles.highlightDot} /><Text style={styles.highlightText}>已高亮：{target} · {highlightedModules.length} 个肌群模块</Text></View>
           <View style={styles.chipWrap}>
             {targets.map((item) => <Chip key={item} label={item} active={target === item} onPress={() => setTarget(item)} />)}
           </View>
@@ -230,7 +226,10 @@ const styles = StyleSheet.create({
   modelControlLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '700' },
   modelWrap: { width: '84%', aspectRatio: 1307 / 1203, position: 'relative' },
   modelImage: { width: '100%', height: '100%' },
-  moduleOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' },
+  moduleOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%', opacity: 0.96 },
+  highlightStatus: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: spacing.x2, paddingHorizontal: spacing.x3, borderRadius: radius.control, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryBorder, marginBottom: spacing.x3 },
+  highlightDot: { width: 9, height: 9, borderRadius: radius.pill, backgroundColor: colors.primary },
+  highlightText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   targetPath: { position: 'absolute', left: spacing.x4, bottom: spacing.x4 },
   targetPathLabel: { ...typography.eyebrow, color: colors.textSecondary },
   targetPathValue: { ...typography.listTitle, color: colors.text, marginTop: 2 },
