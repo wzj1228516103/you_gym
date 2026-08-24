@@ -8,15 +8,39 @@ import {
   Sparkles,
   Trees,
 } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { AppScreen, Card, Chip, PrimaryButton, ScreenHeader, Tag } from '../../components/ui';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppScreen, Card, Chip, PrimaryButton, ScreenHeader, SegmentedControl, Tag } from '../../components/ui';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
-import type { PlanStackParamList } from '../../types';
+import type { Gender, PlanStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'QuickWorkout'>;
 
 const targets = ['胸部', '背部', '肩部', '手臂', '核心', '臀腿'];
+
+const anatomyAssets: Record<Gender, number> = {
+  male: require('../../../assets/anatomy/anatomy-color-front-back.png'),
+  female: require('../../../assets/anatomy/anatomy-female-front-back.png'),
+};
+
+const targetModuleAssets: Record<Gender, Record<string, number>> = {
+  male: {
+    胸部: require('../../../assets/anatomy/modules/pectoralis-major.png'),
+    背部: require('../../../assets/anatomy/modules/latissimus-dorsi.png'),
+    肩部: require('../../../assets/anatomy/modules/deltoid-middle.png'),
+    手臂: require('../../../assets/anatomy/modules/biceps-brachii.png'),
+    核心: require('../../../assets/anatomy/modules/rectus-abdominis.png'),
+    臀腿: require('../../../assets/anatomy/modules/gluteus-maximus.png'),
+  },
+  female: {
+    胸部: require('../../../assets/anatomy/female-modules/pectoralis-major.png'),
+    背部: require('../../../assets/anatomy/female-modules/latissimus-dorsi.png'),
+    肩部: require('../../../assets/anatomy/female-modules/deltoid-middle.png'),
+    手臂: require('../../../assets/anatomy/female-modules/biceps-brachii.png'),
+    核心: require('../../../assets/anatomy/female-modules/rectus-abdominis.png'),
+    臀腿: require('../../../assets/anatomy/female-modules/gluteus-maximus.png'),
+  },
+};
 
 export function QuickWorkoutScreen({ navigation }: Props) {
   const { exercises, replaceTodayExercises } = useAppState();
@@ -24,6 +48,7 @@ export function QuickWorkoutScreen({ navigation }: Props) {
   const [venue, setVenue] = useState('健身房');
   const [equipment, setEquipment] = useState(['哑铃', '杠铃', '器械']);
   const [target, setTarget] = useState('胸部');
+  const [gender, setGender] = useState<Gender>('male');
   const [selectedIds, setSelectedIds] = useState(['incline-dumbbell-press', 'push-up', 'dumbbell-shoulder-press']);
 
   const selectedExercises = useMemo(
@@ -98,13 +123,20 @@ export function QuickWorkoutScreen({ navigation }: Props) {
         <>
           <Text style={styles.title}>选择目标肌群</Text>
           <Text style={styles.subtitle}>本次训练优先安排一个主要肌群。</Text>
+          <View style={styles.modelControls}>
+            <Text style={styles.modelControlLabel}>人体模型</Text>
+            <SegmentedControl options={[{ label: '男性', value: 'male' }, { label: '女性', value: 'female' }]} value={gender} onChange={setGender} />
+          </View>
           <View style={styles.targetStage}>
-            <View style={styles.bodySilhouette}>
-              <View style={styles.bodyHead} />
-              <View style={styles.bodyTorso}>
-                <View style={[styles.bodyHighlight, target === '胸部' && styles.bodyHighlightActive]} />
-              </View>
-              <View style={styles.bodyLegs}><View style={styles.bodyLeg} /><View style={styles.bodyLeg} /></View>
+            <View style={styles.modelWrap}>
+              <Image source={anatomyAssets[gender]} resizeMode="contain" style={styles.modelImage} accessibilityLabel={`${gender === 'male' ? '男性' : '女性'}正面与背面肌肉图`} />
+              <Image
+                source={targetModuleAssets[gender][target]}
+                resizeMode="contain"
+                tintColor={colors.primary}
+                style={styles.moduleOverlay}
+                accessibilityLabel={`${target}目标肌群高亮`}
+              />
             </View>
             <View style={styles.targetPath}><Text style={styles.targetPathLabel}>本次目标</Text><Text style={styles.targetPathValue}>{target} · 主要肌群</Text></View>
           </View>
@@ -194,13 +226,11 @@ const styles = StyleSheet.create({
   sectionLabel: { ...typography.listTitle, color: colors.text, marginTop: spacing.x6, marginBottom: spacing.x3 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   targetStage: { minHeight: 280, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.anatomyStage, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.x4, overflow: 'hidden' },
-  bodySilhouette: { alignItems: 'center' },
-  bodyHead: { width: 44, height: 52, borderRadius: 22, backgroundColor: colors.anatomyBase, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' },
-  bodyTorso: { width: 112, height: 112, marginTop: 3, borderRadius: 38, backgroundColor: '#697789', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', alignItems: 'center', paddingTop: 14 },
-  bodyHighlight: { width: 82, height: 32, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)' },
-  bodyHighlightActive: { backgroundColor: colors.muscle },
-  bodyLegs: { flexDirection: 'row', gap: 7, marginTop: 2 },
-  bodyLeg: { width: 42, height: 88, borderRadius: 18, backgroundColor: '#697789', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' },
+  modelControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.x3, marginBottom: spacing.x3 },
+  modelControlLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '700' },
+  modelWrap: { width: '84%', aspectRatio: 1307 / 1203, position: 'relative' },
+  modelImage: { width: '100%', height: '100%' },
+  moduleOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' },
   targetPath: { position: 'absolute', left: spacing.x4, bottom: spacing.x4 },
   targetPathLabel: { ...typography.eyebrow, color: colors.textSecondary },
   targetPathValue: { ...typography.listTitle, color: colors.text, marginTop: 2 },
