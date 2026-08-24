@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bookmark, ChevronRight, Dumbbell, SearchX, SlidersHorizontal } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, IconButton, ScreenHeader, Tag } from '../../components/ui';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
+import { API_BASE_URL } from '../../services/api';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseFilter'>;
@@ -53,7 +54,7 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
         </Card>
       ) : results.map((exercise) => (
         <Card key={exercise.id} onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: exercise.id, nodeId: node.id })} accessibilityLabel={`查看${exercise.name}`} style={styles.exerciseCard}>
-          <View style={styles.exerciseArt}><Dumbbell size={28} color={colors.muscle} /></View>
+          <View style={styles.exerciseArt}><ExerciseThumbnail exercise={exercise} /></View>
           <View style={styles.exerciseCopy}>
             <Text style={styles.exerciseName}>{exercise.name}</Text>
             <Text style={styles.exerciseMeta}>{exercise.equipment} · {exercise.target}</Text>
@@ -67,6 +68,12 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
       ))}
     </AppScreen>
   );
+}
+
+function ExerciseThumbnail({ exercise }: { exercise: import('../../types').Exercise }) {
+  const thumbnail = exercise.mediaResources?.find((resource) => resource.resourceType === 'THUMBNAIL_IMAGE')?.resourceUrl ?? exercise.mediaUrl;
+  const url = thumbnail?.startsWith('http') ? thumbnail : thumbnail ? `${API_BASE_URL}${thumbnail}` : undefined;
+  return url ? <Image source={{ uri: url }} resizeMode="cover" style={styles.exerciseThumbnail} /> : <Dumbbell size={28} color={colors.muscle} />;
 }
 
 function FilterRow({ title, values, value, onChange }: { title: string; values: string[]; value: string; onChange: (value: string) => void }) {
@@ -88,6 +95,7 @@ const styles = StyleSheet.create({
   resultCount: { ...typography.body, color: colors.text, fontWeight: '700' },
   exerciseCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3, marginBottom: spacing.x2, padding: spacing.x3 },
   exerciseArt: { width: 64, height: 64, flexShrink: 0, borderRadius: radius.card, backgroundColor: '#0E0F12', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,45,85,0.22)' },
+  exerciseThumbnail: { width: '100%', height: '100%', borderRadius: radius.card },
   exerciseCopy: { flex: 1, minWidth: 0 },
   exerciseName: { ...typography.listTitle, color: colors.text },
   exerciseMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },

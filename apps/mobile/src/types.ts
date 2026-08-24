@@ -23,6 +23,7 @@ export type Exercise = {
   name: string;
   nameEn: string;
   target: string;
+  targetCodes?: string[];
   equipment: string;
   location: string;
   level: '新手' | '初级' | '中级';

@@ -49,6 +49,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         if (normalized.length) {
           setCatalogExercises(normalized);
           setExerciseCatalogSynced(true);
+          setAnatomyNodes((current) => current.map((node) => ({
+            ...node,
+            exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
+          })));
         }
       }
     });
@@ -70,6 +74,40 @@ export function AppStateProvider({ children }: PropsWithChildren) {
   }), [activeExercises, anatomyNodes, anatomySynced, exerciseCatalogSynced, selectedNode, selectedNodeId, todayExerciseIds, todayExercises]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
+}
+
+function matchesAnatomyNode(exercise: Exercise, node: AnatomyNode) {
+  const nodeId = node.id.toLowerCase();
+  const targetCodes = (exercise.targetCodes ?? []).map((code) => code.toLowerCase());
+  const aliases: Record<string, string[]> = {
+    'pectoralis-major': ['muscle.pectoralis-major', 'muscle.chest', 'pectoralis-major', 'pectoralis', 'chest'],
+    'serratus-anterior': ['muscle.serratus-anterior', 'serratus-anterior', 'serratus'],
+    'latissimus-dorsi': ['muscle.latissimus-dorsi', 'latissimus-dorsi', 'latissimus', 'lats'],
+    'erector-spinae': ['muscle.erector-spinae', 'erector-spinae', 'erector spinae', 'lower back'],
+    'trapezius': ['muscle.trapezius', 'trapezius', 'traps'],
+    'deltoid': ['muscle.deltoid', 'deltoid', 'delts', 'shoulders'],
+    'biceps': ['muscle.biceps-brachii', 'muscle.biceps', 'biceps-brachii', 'biceps'],
+    'triceps': ['muscle.triceps-brachii', 'muscle.triceps', 'triceps-brachii', 'triceps'],
+    'forearm': ['muscle.forearm', 'forearm', 'wrist'],
+    'rectus-abdominis': ['muscle.rectus-abdominis', 'rectus-abdominis', 'abs', 'abdominals'],
+    'external-oblique': ['muscle.external-oblique', 'external-oblique', 'oblique', 'obliques'],
+    'hip-flexor': ['muscle.hip-flexors', 'muscle.hip-flexor', 'hip-flexors', 'hip-flexor'],
+    'gluteus-maximus': ['muscle.gluteus-maximus', 'gluteus-maximus', 'glutes'],
+    'gluteus-medius': ['muscle.gluteus-medius', 'gluteus-medius'],
+    'hamstrings': ['muscle.hamstrings', 'hamstrings'],
+    'quadriceps': ['muscle.quadriceps', 'quadriceps', 'quads'],
+    'vastus-lateralis': ['muscle.quadriceps', 'muscle.vastus-lateralis', 'quadriceps', 'quads'],
+    'rectus-femoris': ['muscle.quadriceps', 'muscle.rectus-femoris', 'quadriceps', 'quads'],
+    'adductors': ['muscle.adductors', 'adductors'],
+    'tibialis-anterior': ['muscle.tibialis-anterior', 'tibialis-anterior', 'tibialis', 'shins'],
+    'gastrocnemius': ['muscle.gastrocnemius', 'gastrocnemius', 'calves', 'calf'],
+    'soleus': ['muscle.soleus', 'soleus', 'calves', 'calf'],
+  };
+  const aliasesForNode = Object.entries(aliases).find(([key]) => nodeId.includes(key))?.[1] ?? [nodeId, node.muscle.toLowerCase(), node.part.toLowerCase()];
+  const codeMatches = targetCodes.some((code) => aliasesForNode.some((alias) => code === alias || code.startsWith(`${alias}.`) || alias.startsWith(`${code}.`)));
+  if (codeMatches) return true;
+  const searchableText = `${exercise.target ?? ''} ${exercise.name} ${exercise.nameEn}`.toLowerCase();
+  return aliasesForNode.some((alias) => searchableText.includes(alias));
 }
 
 const legacyExerciseIds: Record<string, string> = {
@@ -101,6 +139,7 @@ function toExercise(item: import('../services/api').ExerciseCatalogItem): Exerci
     name: translateExerciseName(item.nameZh || item.nameEn),
     nameEn: item.nameEn,
     target: item.targetMuscles.map((muscle) => muscleLabels[muscle] ?? muscle).join('、'),
+    targetCodes: item.targetMuscles,
     equipment: item.equipment,
     location: item.location,
     level,
