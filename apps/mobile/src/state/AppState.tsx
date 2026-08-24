@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { anatomyNodes as localAnatomyNodes, exercises } from '../data/mockData';
 import { mergeAnatomyNodes } from '../data/anatomyMerge';
+import { translateExerciseName } from '../data/exerciseNameZh';
 import { fetchAnatomyTree, fetchExerciseCatalog } from '../services/api';
 import type { AnatomyNode, Exercise } from '../types';
 
@@ -97,7 +98,7 @@ function toExercise(item: import('../services/api').ExerciseCatalogItem): Exerci
   return {
     id: legacyExerciseIds[item.id] ?? item.id,
     sourceId: item.id,
-    name: item.nameZh,
+    name: translateExerciseName(item.nameZh || item.nameEn),
     nameEn: item.nameEn,
     target: item.targetMuscles.map((muscle) => muscleLabels[muscle] ?? muscle).join('、'),
     equipment: item.equipment,
@@ -138,7 +139,6 @@ const muscleLabels: Record<string, string> = {
   'muscle.biceps-brachii': '肱二头肌',
   'muscle.triceps': '肱三头肌',
   'muscle.triceps-brachii': '肱三头肌',
-  'muscle.core': '核心',
   'muscle.rectus-abdominis': '腹直肌',
   'muscle.gluteus-maximus': '臀大肌',
   'muscle.gluteus-medius': '臀中肌',
@@ -148,6 +148,19 @@ const muscleLabels: Record<string, string> = {
   'muscle.tibialis-anterior': '胫骨前肌',
   'muscle.gastrocnemius': '腓肠肌',
   'muscle.soleus': '比目鱼肌',
+  'muscle.core': '核心',
+  'muscle.hip-flexors': '髋屈肌',
+  'muscle.external-oblique': '腹外斜肌',
+  'muscle.ankle-stabilizers': '踝关节稳定肌',
+  'muscle.shoulders': '肩部',
+  'dataset.serratus-anterior': '前锯肌',
+  'dataset.obliques': '腹斜肌',
+  'dataset.hip-flexors': '髋屈肌',
+  'dataset.ankle-stabilizers': '踝关节稳定肌',
+  'dataset.shoulders': '肩部',
+  'dataset.erector-spinae': '竖脊肌',
+  'dataset.gluteus-medius': '臀中肌',
+  'dataset.piriformis': '梨状肌',
 };
 
 export function useAppState() {

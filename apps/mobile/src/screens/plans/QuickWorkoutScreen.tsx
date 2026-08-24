@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   Check,
+  ChevronRight,
   Dumbbell,
   Home,
   SlidersHorizontal,
@@ -162,10 +163,11 @@ export function QuickWorkoutScreen({ navigation }: Props) {
           {recommendedExercises.map((exercise) => {
             const active = selectedIds.includes(exercise.id);
             return (
-              <Pressable key={exercise.id} onPress={() => toggleExercise(exercise.id)} style={[styles.exerciseRow, active && styles.exerciseRowActive]}>
+              <Pressable key={exercise.id} onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: exercise.id })} accessibilityLabel={`查看${exercise.name}详情`} style={[styles.exerciseRow, active && styles.exerciseRowActive]}>
                 <View style={styles.exerciseArt}><Dumbbell size={23} color={active ? colors.primary : colors.textSecondary} /></View>
                 <View style={styles.exerciseCopy}><Text style={styles.exerciseName}>{exercise.name}</Text><Text style={styles.exerciseMeta}>{exercise.target} · {exercise.equipment}{exercise.rating > 0 ? ` · ${exercise.rating.toFixed(1)} 分` : ''}</Text></View>
-                <View style={[styles.checkBox, active && styles.checkBoxActive]}>{active ? <Check size={15} color={colors.textInverse} strokeWidth={3} /> : null}</View>
+                <ChevronRight size={18} color={colors.textTertiary} />
+                <Pressable hitSlop={10} accessibilityRole="checkbox" accessibilityState={{ checked: active }} accessibilityLabel={`${active ? '取消选择' : '选择'}${exercise.name}`} onPress={(event) => { event.stopPropagation(); toggleExercise(exercise.id); }} style={[styles.checkBox, active && styles.checkBoxActive]}>{active ? <Check size={15} color={colors.textInverse} strokeWidth={3} /> : null}</Pressable>
               </Pressable>
             );
           })}

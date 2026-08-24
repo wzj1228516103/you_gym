@@ -17,6 +17,7 @@ import { PlanDetailScreen } from './src/screens/plans/PlanDetailScreen';
 import { PlanHomeScreen } from './src/screens/plans/PlanHomeScreen';
 import { PlanLibraryScreen } from './src/screens/plans/PlanLibraryScreen';
 import { QuickWorkoutScreen } from './src/screens/plans/QuickWorkoutScreen';
+import { QuickWorkoutExerciseDetailScreen } from './src/screens/plans/QuickWorkoutExerciseDetailScreen';
 import { HistoryScreen } from './src/screens/plans/HistoryScreen';
 import { RestScreen } from './src/screens/plans/RestScreen';
 import { WorkoutScreen } from './src/screens/plans/WorkoutScreen';
@@ -57,7 +58,7 @@ function AnatomyNavigator() {
 }
 
 function PlanNavigator() {
-  return <PlanStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><PlanStack.Screen name="PlanHome" component={PlanHomeScreen} /><PlanStack.Screen name="PlanLibrary" component={PlanLibraryScreen} /><PlanStack.Screen name="PlanDetail" component={PlanDetailScreen} /><PlanStack.Screen name="QuickWorkout" component={QuickWorkoutScreen} /><PlanStack.Screen name="History" component={HistoryScreen} /><PlanStack.Screen name="Workout" component={WorkoutScreen} /><PlanStack.Screen name="Rest" component={RestScreen} /><PlanStack.Screen name="WorkoutSummary" component={WorkoutSummaryScreen} /></PlanStack.Navigator>;
+  return <PlanStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><PlanStack.Screen name="PlanHome" component={PlanHomeScreen} /><PlanStack.Screen name="PlanLibrary" component={PlanLibraryScreen} /><PlanStack.Screen name="PlanDetail" component={PlanDetailScreen} /><PlanStack.Screen name="QuickWorkout" component={QuickWorkoutScreen} /><PlanStack.Screen name="ExerciseDetail" component={QuickWorkoutExerciseDetailScreen} /><PlanStack.Screen name="History" component={HistoryScreen} /><PlanStack.Screen name="Workout" component={WorkoutScreen} /><PlanStack.Screen name="Rest" component={RestScreen} /><PlanStack.Screen name="WorkoutSummary" component={WorkoutSummaryScreen} /></PlanStack.Navigator>;
 }
 
 function NutritionNavigator() {

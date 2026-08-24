@@ -56,6 +56,7 @@ export type PlanStackParamList = {
   PlanLibrary: undefined;
   PlanDetail: { planId: string };
   QuickWorkout: undefined;
+  ExerciseDetail: { exerciseId: string };
   History: undefined;
   Workout: undefined;
   Rest: { seconds: number; setNumber?: number; weight?: number; reps?: number; exerciseName?: string };

@@ -7,36 +7,47 @@ import { useAppState } from '../../state/AppState';
 import { serverAnatomyId } from '../../data/anatomyMerge';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
-import { API_BASE_URL, ExerciseContent, fetchPublishedExerciseContent } from '../../services/api';
+import { API_BASE_URL, ExerciseContent, fetchExercise, fetchPublishedExerciseContent } from '../../services/api';
+import { translateExerciseName } from '../../data/exerciseNameZh';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseDetail'>;
 
 export function ExerciseDetailScreen({ navigation, route }: Props) {
+  return <ExerciseDetailContent exerciseId={route.params.exerciseId} nodeId={route.params.nodeId} onBack={navigation.goBack} />;
+}
+
+export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exerciseId: string; nodeId?: string; onBack: () => void }) {
   const { addExercise, todayExerciseIds, exercises } = useAppState();
-  const exercise = exercises.find((item) => item.id === route.params.exerciseId) ?? exercises[0];
+  const exercise = exercises.find((item) => item.id === exerciseId) ?? exercises[0];
   const [saved, setSaved] = useState(false);
   const [content, setContent] = useState<ExerciseContent | null>(null);
+  const [catalogExercise, setCatalogExercise] = useState<import('../../services/api').ExerciseCatalogItem | null>(null);
   const added = todayExerciseIds.includes(exercise.id);
   const catalogMediaUrl = exercise.mediaUrl?.startsWith('http') ? exercise.mediaUrl : exercise.mediaUrl ? `${API_BASE_URL}${exercise.mediaUrl}` : undefined;
+  const displayName = translateExerciseName(catalogExercise?.nameZh ?? exercise.name);
+  const displaySteps = catalogExercise?.datasetDetail?.instructionSteps?.zh?.length ? catalogExercise.datasetDetail.instructionSteps.zh : exercise.steps;
 
   useEffect(() => {
-    trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: exercise.name }, { screenId: 'exercise_detail' });
+    trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: displayName }, { screenId: 'exercise_detail' });
     let active = true;
-    void fetchPublishedExerciseContent(exercise.name, route.params.nodeId ? serverAnatomyId(route.params.nodeId) : undefined).then(({ items }) => {
+    void fetchExercise(exercise.sourceId ?? exercise.id).then((item) => {
+      if (active) setCatalogExercise(item);
+    }).catch(() => { if (active) setCatalogExercise(null); });
+    void fetchPublishedExerciseContent(displayName, nodeId ? serverAnatomyId(nodeId) : undefined).then(({ items }) => {
       if (!active) return;
-      const match = route.params.nodeId ? items[0] : items.find((item) => item.title === exercise.name);
+      const match = nodeId ? items[0] : items.find((item) => item.title === displayName);
       setContent(match ?? null);
     }).catch(() => { if (active) setContent(null); });
     return () => { active = false; };
-  }, [exercise.id, exercise.name]);
+  }, [displayName, exercise.id, exercise.sourceId, nodeId]);
 
   return (
     <AppScreen>
-      <ScreenHeader title="动作详情" onBack={navigation.goBack} actions={<IconButton icon={Bookmark} label="收藏动作" active={saved} size={42} onPress={() => setSaved((value) => !value)} />} />
+      <ScreenHeader title="动作详情" onBack={onBack} actions={<IconButton icon={Bookmark} label="收藏动作" active={saved} size={42} onPress={() => setSaved((value) => !value)} />} />
 
       <View style={styles.titleRow}>
-        <View style={styles.titleCopy}><Text style={styles.title}>{exercise.name}</Text><Text style={styles.english}>{exercise.nameEn}</Text></View>
+        <View style={styles.titleCopy}><Text style={styles.title}>{displayName}</Text><Text style={styles.english}>{exercise.nameEn}</Text></View>
         <Tag tone="primary">{exercise.level}</Tag>
       </View>
       <View style={styles.metaRow}><Tag>{exercise.target}</Tag><Tag>{exercise.equipment}</Tag><Tag>{exercise.location}</Tag></View>
@@ -56,7 +67,7 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
       </View>
 
       <SectionHeader title="标准动作步骤" />
-      <Card style={styles.listCard}>{exercise.steps.map((step, index) => <View key={step} style={styles.stepRow}><View style={styles.stepIndex}><Text style={styles.stepIndexText}>{index + 1}</Text></View><Text style={styles.stepText}>{step}</Text></View>)}</Card>
+      <Card style={styles.listCard}>{displaySteps.map((step, index) => <View key={`${index}-${step}`} style={styles.stepRow}><View style={styles.stepIndex}><Text style={styles.stepIndexText}>{index + 1}</Text></View><Text style={styles.stepText}>{step}</Text></View>)}</Card>
 
       {content?.summary || content?.body ? <><SectionHeader title="教练补充" /><Card style={styles.contentCard}>{content.summary ? <Text style={styles.contentSummary}>{content.summary}</Text> : null}{content.body ? <Text style={styles.contentBody}>{content.body}</Text> : null}</Card></> : null}
 

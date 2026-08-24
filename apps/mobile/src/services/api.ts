@@ -37,6 +37,11 @@ export type ExerciseCatalogItem = {
   angleViews: string[]; stepLabels: string[]; sourceImage: string | null;
   sourcePanel: string | null; sourceNote: string | null;
   resources: { id: string; resourceType: string; viewLabel: string; resourceUrl: string; sortOrder: number; sourceImage: string }[];
+  datasetDetail?: {
+    instructions?: Record<string, string>;
+    instructionSteps?: Record<string, string[]>;
+    mediaAttribution?: string;
+  };
 };
 
 export type PlanSummary = {
@@ -80,6 +85,7 @@ export function fetchNutrition(token: string) { return request<{ items: Nutritio
 export function fetchAnatomyTree(gender: 'male' | 'female' | 'all' = 'all') { return request<{ version: number; gender: string; view: string; items: AnatomyTreeNode[] }>(`/api/v1/anatomy/tree?gender=${gender}&view=all`); }
 export function fetchPublishedExerciseContent(search?: string, anatomyNodeId?: string) { const query = new URLSearchParams({ contentType: 'EXERCISE', limit: '20' }); if (search) query.set('search', search); if (anatomyNodeId) query.set('anatomyNodeId', anatomyNodeId); return request<{ items: ExerciseContent[] }>(`/api/v1/content?${query.toString()}`); }
 export function fetchExerciseCatalog(search?: string, equipment?: string) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); if (equipment) query.set('equipment', equipment); return request<{ items: ExerciseCatalogItem[]; source: string }>(`/api/v1/exercises?${query.toString()}`); }
+export function fetchExercise(id: string) { return request<ExerciseCatalogItem>(`/api/v1/exercises/${encodeURIComponent(id)}`); }
 export function fetchPlans(category?: string, search?: string) { const query = new URLSearchParams({ limit: '100' }); if (category && category !== '全部') query.set('category', category); if (search) query.set('search', search); return request<{ items: PlanSummary[] }>(`/api/v1/plans?${query.toString()}`); }
 export function fetchPlan(id: string) { return request<PlanDetail>(`/api/v1/plans/${encodeURIComponent(id)}`); }
 export function fetchFoods(search?: string) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); return request<{ items: FoodItem[] }>(`/api/v1/foods?${query.toString()}`); }
