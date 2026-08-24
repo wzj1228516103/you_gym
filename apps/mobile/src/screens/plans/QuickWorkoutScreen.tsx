@@ -55,6 +55,10 @@ export function QuickWorkoutScreen({ navigation }: Props) {
     () => exercises.filter((exercise) => selectedIds.includes(exercise.id)),
     [selectedIds],
   );
+  const targetModuleLayers = useMemo(
+    () => Object.entries(targetModuleAssets[gender]).flatMap(([targetName, assets]) => assets.map((asset, index) => ({ asset, index, targetName }))),
+    [gender],
+  );
   const highlightedModules = targetModuleAssets[gender][target] ?? [];
   const recommendedExercises = useMemo(() => {
     const matchers: Record<string, string[]> = {
@@ -131,7 +135,16 @@ export function QuickWorkoutScreen({ navigation }: Props) {
           <View style={styles.targetStage}>
             <View style={styles.modelWrap}>
               <Image source={anatomyAssets[gender]} resizeMode="contain" style={styles.modelImage} accessibilityLabel={`${gender === 'male' ? '男性' : '女性'}正面与背面肌肉图`} />
-              {highlightedModules.map((asset, index) => <Image key={`${target}-${gender}-${index}`} source={asset} resizeMode="contain" tintColor={colors.primary} style={styles.moduleOverlay} accessibilityLabel={`${target}目标肌群高亮`} />)}
+              {targetModuleLayers.map(({ asset, index, targetName }) => (
+                <Image
+                  key={`${gender}-${targetName}-${index}`}
+                  source={asset}
+                  resizeMode="contain"
+                  tintColor={colors.primary}
+                  style={[styles.moduleOverlay, targetName !== target && styles.moduleOverlayHidden]}
+                  accessibilityLabel={targetName === target ? `${targetName}目标肌群高亮` : undefined}
+                />
+              ))}
             </View>
             <View style={styles.targetPath}><Text style={styles.targetPathLabel}>本次目标</Text><Text style={styles.targetPathValue}>{target} · 主要肌群</Text></View>
           </View>
@@ -227,6 +240,7 @@ const styles = StyleSheet.create({
   modelWrap: { width: '84%', aspectRatio: 1307 / 1203, position: 'relative' },
   modelImage: { width: '100%', height: '100%' },
   moduleOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%', opacity: 0.96 },
+  moduleOverlayHidden: { opacity: 0 },
   highlightStatus: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: spacing.x2, paddingHorizontal: spacing.x3, borderRadius: radius.control, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryBorder, marginBottom: spacing.x3 },
   highlightDot: { width: 9, height: 9, borderRadius: radius.pill, backgroundColor: colors.primary },
   highlightText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
