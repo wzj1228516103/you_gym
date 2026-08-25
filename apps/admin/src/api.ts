@@ -186,6 +186,7 @@ export type ContentItem = {
 export type ContentInput = { title: string; contentType: ContentType; summary: string; body: string; mediaUrl: string; mediaAssets: ContentMediaAsset[]; anatomyNodeId: string };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export function resolveMediaUrl(url: string | null | undefined) {
   if (!url) return '';
@@ -200,8 +201,21 @@ function authHeaders(token: string): HeadersInit {
     : { 'X-Admin-Test-Token': token };
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (cause) {
+    if (controller.signal.aborted) throw new Error('请求超时，请稍后重试');
+    throw cause;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request<T>(path: string, token: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     headers: authHeaders(token),
   });
   if (!response.ok) {
@@ -212,7 +226,7 @@ async function request<T>(path: string, token: string): Promise<T> {
 }
 
 export async function loginAdmin(username: string, password: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/auth/login`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -222,7 +236,7 @@ export async function loginAdmin(username: string, password: string) {
 }
 
 export async function registerAdmin(input: { username: string; displayName: string; password: string; inviteCode: string }) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/auth/register`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -236,7 +250,7 @@ export async function registerAdmin(input: { username: string; displayName: stri
 }
 
 export async function logoutAdmin(token: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/auth/logout`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/auth/logout`, {
     method: 'POST',
     headers: authHeaders(token),
   });
@@ -309,7 +323,7 @@ export function fetchAdminExerciseCatalog(token: string, search?: string, page =
 }
 export type ExerciseCatalogInput = { nameZh: string; nameEn: string; targetMuscles: string[]; equipment: string; location: string; difficultyLevel: string; recommendedReps: string; recommendedSets: string; restSecondsMin: number | null; restSecondsMax: number | null; sourceNote: string };
 export async function updateAdminExerciseCatalog(token: string, id: string, input: ExerciseCatalogInput) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/exercise-catalog/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/exercise-catalog/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(response.status === 404 ? '动作不存在' : `更新动作失败（${response.status}）`);
   return response.json() as Promise<ExerciseCatalogItem>;
 }
@@ -322,22 +336,22 @@ export function fetchAdminFoodCatalog(token: string, search?: string, status?: F
 
 export type FoodCatalogInput = { id?: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; status?: FoodCatalogItem['status']; mediaUrl?: string; mediaAssets?: CatalogMediaAsset[] };
 export async function createFoodCatalogItem(token: string, input: FoodCatalogInput) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/food-catalog`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(response.status === 409 ? '食物 ID 已存在' : `创建食物失败（${response.status}）`);
   return response.json() as Promise<FoodCatalogItem>;
 }
 export async function updateFoodCatalogItem(token: string, id: string, input: FoodCatalogInput) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(`更新食物失败（${response.status}）`);
   return response.json() as Promise<FoodCatalogItem>;
 }
 export async function updateFoodCatalogStatus(token: string, id: string, status: FoodCatalogItem['status']) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
   if (!response.ok) throw new Error(`更新食物状态失败（${response.status}）`);
   return response.json() as Promise<FoodCatalogItem>;
 }
 export async function deleteFoodCatalogItem(token: string, id: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/food-catalog/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) });
   if (!response.ok) throw new Error(`删除食物失败（${response.status}）`);
 }
 
@@ -350,19 +364,19 @@ export function fetchContent(token: string, filters: { status?: ContentStatus; c
 }
 
 export async function createContent(token: string, input: ContentInput) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/content`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/content`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(`创建内容失败（${response.status}）`);
   return response.json() as Promise<ContentItem>;
 }
 
 export async function updateContent(token: string, id: string, input: ContentInput) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   if (!response.ok) throw new Error(`更新内容失败（${response.status}）`);
   return response.json() as Promise<ContentItem>;
 }
 
 export async function deleteContent(token: string, id: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) });
   if (!response.ok) throw new Error(`删除内容失败（${response.status}）`);
   return response.json() as Promise<{ deleted: boolean; mediaAssets: ContentMediaAsset[] }>;
 }
@@ -381,6 +395,7 @@ export function uploadContentMedia(token: string, files: File[], onProgress?: (p
   return new Promise<ContentMediaUploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_BASE_URL}/api/file/media-upload/batch`);
+    xhr.timeout = REQUEST_TIMEOUT_MS;
     Object.entries(authHeaders(token)).forEach(([name, value]) => xhr.setRequestHeader(name, String(value)));
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
@@ -393,25 +408,26 @@ export function uploadContentMedia(token: string, files: File[], onProgress?: (p
       } catch { reject(new Error('资源上传响应格式错误')); }
     });
     xhr.addEventListener('error', () => reject(new Error('资源上传网络错误')));
+    xhr.addEventListener('timeout', () => reject(new Error('资源上传超时，请稍后重试')));
     xhr.addEventListener('abort', () => reject(new Error('资源上传已取消')));
     xhr.send(form);
   });
 }
 
 export async function deleteContentMedia(token: string, objectName: string) {
-  const response = await fetch(`${API_BASE_URL}/api/file/media?objectName=${encodeURIComponent(objectName)}`, { method: 'DELETE', headers: authHeaders(token) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/file/media?objectName=${encodeURIComponent(objectName)}`, { method: 'DELETE', headers: authHeaders(token) });
   if (response.status === 404) return;
   if (!response.ok) throw new Error(`资源清理失败（${response.status}）`);
 }
 
 export async function updateContentStatus(token: string, id: string, status: ContentStatus) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/content/${encodeURIComponent(id)}/status`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
   if (!response.ok) throw new Error(`更新内容状态失败（${response.status}）`);
   return response.json() as Promise<ContentItem>;
 }
 
 export async function revokeAdminSession(token: string, sessionId: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/sessions/${encodeURIComponent(sessionId)}/revoke`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/sessions/${encodeURIComponent(sessionId)}/revoke`, {
     method: 'POST',
     headers: authHeaders(token),
   });
@@ -419,7 +435,7 @@ export async function revokeAdminSession(token: string, sessionId: string) {
 }
 
 export async function revokeOtherAdminSessions(token: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/sessions/revoke-all`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/sessions/revoke-all`, {
     method: 'POST',
     headers: authHeaders(token),
   });
@@ -428,7 +444,7 @@ export async function revokeOtherAdminSessions(token: string) {
 }
 
 export async function createAdminAccount(token: string, input: { username: string; displayName: string; password: string; role: AdminRole }) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/accounts`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/accounts`, {
     method: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -438,7 +454,7 @@ export async function createAdminAccount(token: string, input: { username: strin
 }
 
 export async function updateAdminAccount(token: string, username: string, input: { role: AdminRole; status: 'ACTIVE' | 'LOCKED' }) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/accounts/${encodeURIComponent(username)}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/accounts/${encodeURIComponent(username)}`, {
     method: 'PATCH',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -447,7 +463,7 @@ export async function updateAdminAccount(token: string, username: string, input:
 }
 
 export async function downloadAnalyticsCsv(token: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/analytics/events.csv?limit=10000`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/analytics/events.csv?limit=10000`, {
     headers: authHeaders(token),
   });
   if (!response.ok) throw new Error(response.status === 401 ? '管理员 Token 无效或已过期' : `导出失败（${response.status}）`);
@@ -455,13 +471,13 @@ export async function downloadAnalyticsCsv(token: string) {
 }
 
 export async function downloadNutritionCsv(token: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/analytics/nutrition.csv?limit=10000`, { headers: authHeaders(token) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/analytics/nutrition.csv?limit=10000`, { headers: authHeaders(token) });
   if (!response.ok) throw new Error(response.status === 401 ? '管理 Token 无效或已过期' : `导出失败（${response.status}）`);
   return response.blob();
 }
 
 export async function downloadAnalyticsUsersCsv(token: string) {
-  const response = await fetch(`${API_BASE_URL}/api/admin/v1/analytics/users.csv?limit=10000`, { headers: authHeaders(token) });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/admin/v1/analytics/users.csv?limit=10000`, { headers: authHeaders(token) });
   if (!response.ok) throw new Error(response.status === 401 ? '管理 Token 无效或已过期' : `导出失败（${response.status}）`);
   return response.blob();
 }
