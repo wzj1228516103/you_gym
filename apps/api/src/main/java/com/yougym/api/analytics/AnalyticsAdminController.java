@@ -20,6 +20,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/v1/analytics")
 public class AnalyticsAdminController {
+    private static final long MAX_RANGE_DAYS = 366;
+
     private final AnalyticsEventRepository repository;
     private final AdminAccessService accessService;
     private final AuditLogService auditLogService;
@@ -134,6 +136,9 @@ public class AnalyticsAdminController {
             Instant resolvedTo = to == null ? Instant.now() : to;
             Instant resolvedFrom = from == null ? resolvedTo.minus(30, ChronoUnit.DAYS) : from;
             if (!resolvedFrom.isBefore(resolvedTo)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be before to");
+            if (resolvedFrom.isBefore(resolvedTo.minus(MAX_RANGE_DAYS, ChronoUnit.DAYS))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "time range cannot exceed " + MAX_RANGE_DAYS + " days");
+            }
             return new Range(resolvedFrom, resolvedTo);
         }
     }

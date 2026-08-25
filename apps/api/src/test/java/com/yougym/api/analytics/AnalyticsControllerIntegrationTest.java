@@ -398,6 +398,21 @@ class AnalyticsControllerIntegrationTest {
     }
 
     @Test
+    void rejectsAnalyticsAndAuditQueriesThatExceedMaximumTimeRange() throws Exception {
+        mockMvc.perform(get("/api/admin/v1/analytics/summary")
+                        .header("X-Admin-Test-Token", "local-admin")
+                .param("from", "2024-01-01T00:00:00Z")
+                        .param("to", "2026-01-01T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/admin/v1/audit/logs")
+                        .header("X-Admin-Test-Token", "local-admin")
+                .param("from", "2024-01-01T00:00:00Z")
+                        .param("to", "2026-01-01T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void logsInWithBootstrapAccountAndSupportsBearerSessions() throws Exception {
         mockMvc.perform(post("/api/admin/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
