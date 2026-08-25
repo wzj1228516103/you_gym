@@ -133,7 +133,7 @@ export default function App() {
     flush();
     if (Platform.OS === 'web') return undefined;
     const subscription = NativeAppState.addEventListener('change', (state) => {
-      if (state === 'active') flush();
+      if (state === 'active' || state === 'inactive' || state === 'background') flush();
     });
     return () => subscription.remove();
   }, []);

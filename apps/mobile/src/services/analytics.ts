@@ -5,6 +5,8 @@ import { API_BASE_URL } from './api';
 const STORAGE_KEY = 'you-gym:analytics-events:v1';
 const ANALYTICS_ID_STORAGE_KEY = 'you-gym:analytics-anonymous-id:v1';
 const MAX_PENDING_EVENTS = 100;
+const FLUSH_BATCH_SIZE = 10;
+const FLUSH_DEBOUNCE_MS = 1500;
 const APP_VERSION = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.1.0';
 
 export type AnalyticsEventName =
@@ -48,6 +50,8 @@ let anonymousAnalyticsId = createId('anonymous');
 let anonymousIdentityReady: Promise<void> | null = null;
 let sessionId = createId('session');
 let persistenceQueue: Promise<unknown> = Promise.resolve();
+let scheduledFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let apiFlushPromise: Promise<number> | null = null;
 
 function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -90,25 +94,52 @@ export function setAnalyticsUser(userId: string | null) {
 }
 
 export function trackEvent(eventName: AnalyticsEventName, properties: AnalyticsEvent['properties'] = {}, options: TrackEventOptions = {}) {
-  void enqueue(async () => {
+  const eventUserId = analyticsUserId;
+  const eventSessionId = sessionId;
+  const eventOccurredAt = new Date().toISOString();
+  const persist = enqueue(async () => {
     await ensureAnonymousAnalyticsId();
     const event: AnalyticsEvent = {
       eventId: createId('event'),
       eventName,
       eventVersion: 1,
-      userId: analyticsUserId,
-      analyticsUserId: analyticsUserId ?? anonymousAnalyticsId,
-      sessionId,
-      occurredAt: new Date().toISOString(),
+      userId: eventUserId,
+      analyticsUserId: eventUserId ?? anonymousAnalyticsId,
+      sessionId: eventSessionId,
+      occurredAt: eventOccurredAt,
       platform: Platform.OS,
       appVersion: APP_VERSION,
       screenId: options.screenId,
       properties,
     };
     const events = await readEvents();
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...events, event].slice(-MAX_PENDING_EVENTS)));
+    const pendingEvents = [...events, event].slice(-MAX_PENDING_EVENTS);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pendingEvents));
+    return pendingEvents.length;
   });
-  void flushAnalyticsEventsToApi().catch(() => undefined);
+  void persist.then((pendingCount) => {
+    if (pendingCount >= FLUSH_BATCH_SIZE) {
+      scheduleAnalyticsFlush(true);
+    } else {
+      scheduleAnalyticsFlush(false);
+    }
+  }).catch(() => undefined);
+}
+
+function scheduleAnalyticsFlush(immediate: boolean) {
+  if (scheduledFlushTimer) {
+    if (!immediate) return;
+    clearTimeout(scheduledFlushTimer);
+    scheduledFlushTimer = null;
+  }
+  if (immediate) {
+    void flushAnalyticsEventsToApi().catch(() => undefined);
+    return;
+  }
+  scheduledFlushTimer = setTimeout(() => {
+    scheduledFlushTimer = null;
+    void flushAnalyticsEventsToApi().catch(() => undefined);
+  }, FLUSH_DEBOUNCE_MS);
 }
 
 export function startAnalyticsSession() {
@@ -130,12 +161,20 @@ export function flushAnalyticsEvents(sender: (events: AnalyticsEvent[]) => Promi
 }
 
 export function flushAnalyticsEventsToApi() {
-  return flushAnalyticsEvents(async (events) => {
+  if (scheduledFlushTimer) {
+    clearTimeout(scheduledFlushTimer);
+    scheduledFlushTimer = null;
+  }
+  if (apiFlushPromise) return apiFlushPromise;
+  apiFlushPromise = flushAnalyticsEvents(async (events) => {
     const response = await fetch(`${API_BASE_URL}/api/v1/analytics/events:batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ events }),
     });
     if (!response.ok) throw new Error(`analytics upload failed: ${response.status}`);
+  }).finally(() => {
+    apiFlushPromise = null;
   });
+  return apiFlushPromise;
 }
