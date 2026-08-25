@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import type { AnatomyTreeNode } from '../types';
 
 const SESSION_KEY = 'you-gym:app-session:v1';
+const REQUEST_TIMEOUT_MS = 15_000;
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL
   ?? (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
@@ -75,10 +76,24 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string | null) {
-  return parseResponse<T>(await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
-  }));
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const callerSignal = init.signal;
+  const forwardAbort = () => controller.abort();
+  callerSignal?.addEventListener('abort', forwardAbort, { once: true });
+  try {
+    return await parseResponse<T>(await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
+    }));
+  } catch (cause) {
+    if (controller.signal.aborted && !callerSignal?.aborted) throw new Error('请求超时，请稍后重试');
+    throw cause;
+  } finally {
+    clearTimeout(timeoutId);
+    callerSignal?.removeEventListener('abort', forwardAbort);
+  }
 }
 
 export async function loadStoredSession() {

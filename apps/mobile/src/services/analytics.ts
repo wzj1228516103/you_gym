@@ -7,6 +7,7 @@ const ANALYTICS_ID_STORAGE_KEY = 'you-gym:analytics-anonymous-id:v1';
 const MAX_PENDING_EVENTS = 100;
 const FLUSH_BATCH_SIZE = 10;
 const FLUSH_DEBOUNCE_MS = 1500;
+const UPLOAD_TIMEOUT_MS = 15_000;
 const APP_VERSION = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.1.0';
 
 export type AnalyticsEventName =
@@ -167,12 +168,22 @@ export function flushAnalyticsEventsToApi() {
   }
   if (apiFlushPromise) return apiFlushPromise;
   apiFlushPromise = flushAnalyticsEvents(async (events) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/analytics/events:batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ events }),
-    });
-    if (!response.ok) throw new Error(`analytics upload failed: ${response.status}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/analytics/events:batch`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events }),
+      });
+      if (!response.ok) throw new Error(`analytics upload failed: ${response.status}`);
+    } catch (cause) {
+      if (controller.signal.aborted) throw new Error('analytics upload timed out');
+      throw cause;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }).finally(() => {
     apiFlushPromise = null;
   });
