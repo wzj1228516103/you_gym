@@ -28,6 +28,7 @@ const rangeDays = ref(30);
 const loading = ref(false);
 const error = ref('');
 let refreshGeneration = 0;
+const loadedModules = ref(new Set<AdminModule>());
 const lastUpdated = ref('');
 const role = ref<AdminRole | null>(null);
 const permissions = ref<string[]>([]);
@@ -107,12 +108,23 @@ const moduleMeta: Record<AdminModule, { eyebrow: string; title: string; descript
   audit: { eyebrow: 'AUDIT TRAIL', title: '审计日志', description: '追踪后台关键管理操作' },
 };
 const currentModuleMeta = computed(() => moduleMeta[activeModule.value]);
+function quickAccessCount(module: AdminModule, count: number, noun: string) {
+  return loadedModules.value.has(module) ? `${count} ${noun}` : '打开查看详情';
+}
 function navigateTo(module: AdminModule) {
+  if (activeModule.value === module) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
   window.location.hash = `/${module}`;
-  activeModule.value = module;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function syncModuleFromHash() { activeModule.value = moduleFromHash(); }
+function syncModuleFromHash() {
+  const nextModule = moduleFromHash();
+  if (nextModule === activeModule.value) return;
+  activeModule.value = nextModule;
+  if (token.value && role.value) void refresh();
+}
 
 const totalEvents = computed(() => dashboard.value?.kpis.eventCount ?? 0);
 const totalUsers = computed(() => dashboard.value?.kpis.uniqueDevices ?? 0);
@@ -453,57 +465,119 @@ const nutritionTrendOption = computed(() => ({
   ],
 } as const));
 
+async function refreshModule(module: AdminModule, permissionsForSession: string[], from: string, to: string, generation: number) {
+  switch (module) {
+    case 'dashboard':
+      {
+        const nextDashboard = await fetchAnalyticsDashboard(token.value, from, to);
+        if (generation !== refreshGeneration) return;
+        dashboard.value = nextDashboard;
+      }
+      return;
+    case 'analytics': {
+      if (!permissionsForSession.includes('ANALYTICS_READ')) return;
+      const [nextSummary, nextEvents] = await Promise.all([
+        fetchAnalyticsSummary(token.value, from, to),
+        fetchAnalyticsEvents(token.value, selectedEvent.value || undefined),
+      ]);
+      if (generation !== refreshGeneration) return;
+      summary.value = nextSummary;
+      events.value = nextEvents.items;
+      return;
+    }
+    case 'users': {
+      if (!permissionsForSession.includes('ANALYTICS_READ')) return;
+      const [nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition] = await Promise.all([
+        fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined),
+        fetchAppUsers(token.value),
+        fetchAppWorkouts(token.value),
+        fetchAppNutrition(token.value),
+      ]);
+      if (generation !== refreshGeneration) return;
+      analyticsUsers.value = nextUsers.items;
+      appUsers.value = nextAppUsers.items;
+      appWorkouts.value = nextAppWorkouts.items;
+      appNutrition.value = nextAppNutrition.items;
+      return;
+    }
+    case 'nutrition': {
+      if (!permissionsForSession.includes('ANALYTICS_READ')) return;
+      const [nextNutrition, nextFoods] = await Promise.all([
+        fetchNutritionDashboard(token.value, from, to),
+        fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined, foodCatalogPage.value, foodCatalogPageSize),
+      ]);
+      if (generation !== refreshGeneration) return;
+      nutrition.value = nextNutrition;
+      foodCatalogItems.value = nextFoods.items;
+      foodCatalogTotal.value = nextFoods.total;
+      foodCatalogPage.value = nextFoods.page;
+      return;
+    }
+    case 'content': {
+      if (!permissionsForSession.includes('CONTENT_READ')) return;
+      const [nextContent, nextExercises, nextAnatomy] = await Promise.all([
+        fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }),
+        fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined, exerciseCatalogPage.value, exerciseCatalogPageSize),
+        permissionsForSession.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
+      ]);
+      if (generation !== refreshGeneration) return;
+      contentItems.value = nextContent.items;
+      exerciseCatalogItems.value = nextExercises.items;
+      exerciseCatalogTotal.value = nextExercises.total;
+      exerciseCatalogPage.value = nextExercises.page;
+      anatomyNodes.value = nextAnatomy.items;
+      return;
+    }
+    case 'anatomy':
+      if (!permissionsForSession.includes('ANALYTICS_READ')) return;
+      {
+        const nextAnatomy = await fetchAdminAnatomyNodes(token.value);
+        if (generation !== refreshGeneration) return;
+        anatomyNodes.value = nextAnatomy.items;
+      }
+      return;
+    case 'system': {
+      if (!permissionsForSession.includes('ADMIN_ACCOUNT_MANAGE')) return;
+      const [nextAccounts, nextSessions] = await Promise.all([
+        fetchAdminAccounts(token.value),
+        fetchAdminSessions(token.value),
+      ]);
+      if (generation !== refreshGeneration) return;
+      adminAccounts.value = nextAccounts.items;
+      adminSessions.value = nextSessions.items;
+      return;
+    }
+    case 'audit':
+      if (permissionsForSession.includes('AUDIT_READ')) {
+        const nextAudit = await fetchAuditLogs(token.value);
+        if (generation !== refreshGeneration) return;
+        auditLogs.value = nextAudit.items;
+      }
+      return;
+    case 'review':
+      return;
+  }
+}
+
 async function refresh() {
   const generation = ++refreshGeneration;
   loading.value = true;
   error.value = '';
+  let sessionLoaded = false;
   try {
     const session = await fetchAdminSession(token.value);
+    if (generation !== refreshGeneration) return;
+    sessionLoaded = true;
     role.value = session.role;
     permissions.value = session.permissions;
     const { from, to } = rangeBounds();
-    const [nextDashboard, nextSummary, nextEvents, nextAudit, nextAccounts, nextSessions, nextAnatomy, nextContent, nextExercises, nextNutrition, nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition, nextFoods] = await Promise.all([
-      fetchAnalyticsDashboard(token.value, from, to),
-      fetchAnalyticsSummary(token.value, from, to),
-      fetchAnalyticsEvents(token.value, selectedEvent.value || undefined),
-      session.permissions.includes('AUDIT_READ') ? fetchAuditLogs(token.value) : Promise.resolve({ items: [] as AuditLog[] }),
-      session.permissions.includes('ADMIN_ACCOUNT_MANAGE') ? fetchAdminAccounts(token.value) : Promise.resolve({ items: [] as AdminAccount[] }),
-      session.permissions.includes('ADMIN_ACCOUNT_MANAGE') ? fetchAdminSessions(token.value) : Promise.resolve({ items: [] as AdminSessionView[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
-      session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
-      session.permissions.includes('CONTENT_READ') ? fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined, exerciseCatalogPage.value, exerciseCatalogPageSize) : Promise.resolve({ source: 'exercise_catalog', total: 0, page: 1, pageSize: exerciseCatalogPageSize, items: [] as ExerciseCatalogItem[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined) : Promise.resolve({ items: [] as AnalyticsUser[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAppUsers(token.value) : Promise.resolve({ items: [] as AppUser[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAppWorkouts(token.value) : Promise.resolve({ items: [] as WorkoutRecord[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAppNutrition(token.value) : Promise.resolve({ items: [] as NutritionRecord[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined, foodCatalogPage.value, foodCatalogPageSize) : Promise.resolve({ items: [] as FoodCatalogItem[], total: 0, page: 1, pageSize: foodCatalogPageSize }),
-    ]);
+    await refreshModule(activeModule.value, session.permissions, from, to, generation);
     if (generation !== refreshGeneration) return;
-    dashboard.value = nextDashboard;
-    summary.value = nextSummary;
-    events.value = nextEvents.items;
-    auditLogs.value = nextAudit.items;
-    adminAccounts.value = nextAccounts.items;
-    adminSessions.value = nextSessions.items;
-    anatomyNodes.value = nextAnatomy.items;
-    contentItems.value = nextContent.items;
-    exerciseCatalogItems.value = nextExercises.items;
-    exerciseCatalogTotal.value = nextExercises.total;
-    exerciseCatalogPage.value = nextExercises.page;
-    nutrition.value = nextNutrition;
-    analyticsUsers.value = nextUsers.items;
-    appUsers.value = nextAppUsers.items;
-    appWorkouts.value = nextAppWorkouts.items;
-    appNutrition.value = nextAppNutrition.items;
-    foodCatalogItems.value = nextFoods.items;
-    foodCatalogTotal.value = nextFoods.total;
-    foodCatalogPage.value = nextFoods.page;
+    loadedModules.value = new Set(loadedModules.value).add(activeModule.value);
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     if (generation !== refreshGeneration) return;
-    role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1;
+    if (!sessionLoaded) { role.value = null; permissions.value = []; loadedModules.value = new Set(); }
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { if (generation === refreshGeneration) loading.value = false; }
 }
@@ -518,7 +592,7 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
+async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; loadedModules.value = new Set(); dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
@@ -575,9 +649,9 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
         <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">PLATFORM MIX</p><h2>平台分布</h2></div></div><DashboardChart :option="platformOption" :empty="!dashboard?.platformDistribution.length" /></article>
       </section>
       <section v-if="activeModule === 'dashboard'" class="quick-access" aria-label="快捷入口">
-        <button v-if="canReadAnalytics" type="button" @click="navigateTo('users')"><span class="quick-icon"><UsersRound :size="20" /></span><span><strong>用户管理</strong><small>{{ appUsers.length }} 个注册账户</small></span><ChevronRight :size="17" /></button>
-        <button v-if="canReadContent" type="button" @click="navigateTo('content')"><span class="quick-icon"><BookOpen :size="20" /></span><span><strong>内容中心</strong><small>{{ contentItems.length }} 条内容</small></span><ChevronRight :size="17" /></button>
-        <button v-if="canReadAnalytics" type="button" @click="navigateTo('nutrition')"><span class="quick-icon"><Apple :size="20" /></span><span><strong>饮食管理</strong><small>{{ appNutrition.length }} 条饮食记录</small></span><ChevronRight :size="17" /></button>
+        <button v-if="canReadAnalytics" type="button" @click="navigateTo('users')"><span class="quick-icon"><UsersRound :size="20" /></span><span><strong>用户管理</strong><small>{{ quickAccessCount('users', appUsers.length, '个注册账户') }}</small></span><ChevronRight :size="17" /></button>
+        <button v-if="canReadContent" type="button" @click="navigateTo('content')"><span class="quick-icon"><BookOpen :size="20" /></span><span><strong>内容中心</strong><small>{{ quickAccessCount('content', contentItems.length, '条内容') }}</small></span><ChevronRight :size="17" /></button>
+        <button v-if="canReadAnalytics" type="button" @click="navigateTo('nutrition')"><span class="quick-icon"><Apple :size="20" /></span><span><strong>饮食管理</strong><small>{{ quickAccessCount('users', appNutrition.length, '条饮食记录') }}</small></span><ChevronRight :size="17" /></button>
       </section>
       <section v-if="activeModule === 'analytics'" class="content-grid module-content-grid">
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">EVENT SUMMARY</p><h2>事件明细</h2></div></div><div v-if="summary?.items.length" class="summary-list"><div v-for="item in summary.items" :key="item.eventName" class="summary-row"><div class="summary-name"><strong>{{ item.eventName }}</strong><span>{{ item.uniqueUsers }} 个匿名设备</span></div><strong>{{ item.eventCount }}</strong></div></div><div v-else class="empty">暂无事件数据</div></article>
