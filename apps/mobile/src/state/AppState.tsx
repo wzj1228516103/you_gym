@@ -46,16 +46,14 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       }
       if (catalogResult.status === 'fulfilled') {
         const normalized = catalogResult.value.items.map(toExercise);
-        if (normalized.length) {
+        if (normalized.length > 0) {
           setCatalogExercises(normalized);
-        } else {
-          setCatalogExercises([]);
+          setExerciseCatalogSynced(true);
+          setAnatomyNodes((current) => current.map((node) => ({
+            ...node,
+            exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
+          })));
         }
-        setExerciseCatalogSynced(true);
-        setAnatomyNodes((current) => current.map((node) => ({
-          ...node,
-          exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
-        })));
       }
     });
     return () => { active = false; };
