@@ -17,6 +17,17 @@
         </if>
         GROUP BY analytics_user_id
         ORDER BY last_seen DESC
-        LIMIT #{limit}
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="countUsers" resultType="long">
+        SELECT COUNT(DISTINCT analytics_user_id)
+        FROM analytics_event
+        WHERE occurred_at <![CDATA[>=]]> #{from}
+          AND occurred_at <![CDATA[<]]> #{to}
+          AND analytics_user_id IS NOT NULL
+          AND analytics_user_id <![CDATA[<>]]> ''
+        <if test="search != null and search != ''">
+            AND LOWER(analytics_user_id) LIKE CONCAT('%', #{search}, '%')
+        </if>
     </select>
 </mapper>

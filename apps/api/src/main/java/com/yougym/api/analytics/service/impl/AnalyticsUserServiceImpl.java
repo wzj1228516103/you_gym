@@ -19,7 +19,12 @@ public class AnalyticsUserServiceImpl implements AnalyticsUserService {
 
     @Override
     public List<AnalyticsUserVO> listUsers(AnalyticsUserQuery query) {
-        return analyticsUserMapper.selectUsers(query.from(), query.to(), normalizeSearch(query.search()), query.limit());
+        return analyticsUserMapper.selectUsers(query.from(), query.to(), normalizeSearch(query.search()), query.pageSize(), query.offset());
+    }
+
+    @Override
+    public long countUsers(AnalyticsUserQuery query) {
+        return analyticsUserMapper.countUsers(query.from(), query.to(), normalizeSearch(query.search()));
     }
 
     @Override

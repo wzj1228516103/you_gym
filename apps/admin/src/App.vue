@@ -49,6 +49,9 @@ const exerciseForm = ref<ExerciseCatalogInput>({ nameZh: '', nameEn: '', targetM
 const exerciseTargetsText = ref('');
 const nutrition = ref<NutritionDashboard | null>(null);
 const analyticsUsers = ref<AnalyticsUser[]>([]);
+const analyticsUsersTotal = ref(0);
+const analyticsUsersPage = ref(1);
+const analyticsUsersPageSize = 50;
 const appUsers = ref<AppUser[]>([]);
 const appUsersTotal = ref(0);
 const appUsersPage = ref(1);
@@ -149,6 +152,7 @@ const foodCatalogPageCount = computed(() => Math.max(1, Math.ceil(foodCatalogTot
 const appUsersPageCount = computed(() => Math.max(1, Math.ceil(appUsersTotal.value / appPageSize)));
 const appWorkoutsPageCount = computed(() => Math.max(1, Math.ceil(appWorkoutsTotal.value / appPageSize)));
 const appNutritionPageCount = computed(() => Math.max(1, Math.ceil(appNutritionTotal.value / appPageSize)));
+const analyticsUsersPageCount = computed(() => Math.max(1, Math.ceil(analyticsUsersTotal.value / analyticsUsersPageSize)));
 const roleLabel = computed(() => ({ SUPER_ADMIN: '超级管理员', ADMIN: '管理员', EMPLOYEE: '普通员工' }[role.value ?? 'EMPLOYEE']));
 const isSession = computed(() => token.value.startsWith('yg_admin_'));
 
@@ -498,13 +502,15 @@ async function refreshModule(module: AdminModule, permissionsForSession: string[
     case 'users': {
       if (!permissionsForSession.includes('ANALYTICS_READ')) return;
       const [nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition] = await Promise.all([
-        fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined),
+        fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined, analyticsUsersPage.value, analyticsUsersPageSize),
         fetchAppUsers(token.value, undefined, appUsersPage.value, appPageSize),
         fetchAppWorkouts(token.value, undefined, appWorkoutsPage.value, appPageSize),
         fetchAppNutrition(token.value, undefined, appNutritionPage.value, appPageSize),
       ]);
       if (generation !== refreshGeneration) return;
       analyticsUsers.value = nextUsers.items;
+      analyticsUsersTotal.value = nextUsers.total;
+      analyticsUsersPage.value = nextUsers.page;
       appUsers.value = nextAppUsers.items;
       appUsersTotal.value = nextAppUsers.total;
       appUsersPage.value = nextAppUsers.page;
@@ -599,6 +605,28 @@ async function refresh() {
 }
 
 type AppDataPage = 'users' | 'workouts' | 'nutrition';
+async function refreshAnalyticsUsersPage(page: number) {
+  if (!canReadAnalytics.value || loading.value) return;
+  const generation = ++refreshGeneration;
+  loading.value = true;
+  error.value = '';
+  try {
+    const { from, to } = rangeBounds();
+    const result = await fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined, page, analyticsUsersPageSize);
+    if (generation !== refreshGeneration) return;
+    analyticsUsers.value = result.items;
+    analyticsUsersTotal.value = result.total;
+    analyticsUsersPage.value = result.page;
+    lastUpdated.value = new Date().toLocaleString();
+  } catch (cause) {
+    if (generation !== refreshGeneration) return;
+    error.value = cause instanceof Error ? cause.message : '加载匿名用户失败';
+  } finally { if (generation === refreshGeneration) loading.value = false; }
+}
+function changeAnalyticsUsersPage(delta: number) {
+  const nextPage = Math.min(analyticsUsersPageCount.value, Math.max(1, analyticsUsersPage.value + delta));
+  if (nextPage !== analyticsUsersPage.value) void refreshAnalyticsUsersPage(nextPage);
+}
 async function refreshAppDataPage(kind: AppDataPage, page: number) {
   if (!canReadAnalytics.value || loading.value) return;
   const generation = ++refreshGeneration;
@@ -653,7 +681,7 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; loadedModules.value = new Set(); dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appUsersTotal.value = 0; appUsersPage.value = 1; appWorkouts.value = []; appWorkoutsTotal.value = 0; appWorkoutsPage.value = 1; appNutrition.value = []; appNutritionTotal.value = 0; appNutritionPage.value = 1; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
+async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; loadedModules.value = new Set(); dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; analyticsUsersTotal.value = 0; analyticsUsersPage.value = 1; appUsers.value = []; appUsersTotal.value = 0; appUsersPage.value = 1; appWorkouts.value = []; appWorkoutsTotal.value = 0; appWorkoutsPage.value = 1; appNutrition.value = []; appNutritionTotal.value = 0; appNutritionPage.value = 1; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
@@ -719,10 +747,10 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
         <article class="panel"><div class="panel-heading"><div><p class="eyebrow">RECENT EVENTS</p><h2>最近事件</h2></div><select v-model="selectedEvent" aria-label="按事件名称筛选" @change="refresh"><option value="">全部事件</option><option v-for="item in summary?.items ?? []" :key="item.eventName" :value="item.eventName">{{ item.eventName }}</option></select></div><div class="table-wrap"><table><thead><tr><th>事件</th><th>屏幕</th><th>平台</th><th>发生时间</th></tr></thead><tbody><tr v-for="event in events" :key="event.eventId"><td><strong>{{ event.eventName }}</strong><small>{{ event.analyticsUserId ?? '未标识' }}</small></td><td>{{ event.screenId ?? '-' }}</td><td>{{ event.platform ?? '-' }}</td><td>{{ new Date(event.occurredAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!events.length" class="empty">暂无匹配事件</div></div></article>
       </section>
       <section v-if="activeModule === 'users' && canReadAnalytics" class="panel audit-panel users-center module-panel">
-        <div class="panel-heading"><div><p class="eyebrow">USER DIRECTORY</p><h2>用户数据管理</h2></div><div class="content-actions"><span class="panel-note">匿名行为目录 · {{ analyticsUsers.length }} 个用户</span><button v-if="canExport" class="button" type="button" @click="downloadUsersCsv">导出用户 CSV</button></div></div>
+        <div class="panel-heading"><div><p class="eyebrow">USER DIRECTORY</p><h2>用户数据管理</h2></div><div class="content-actions"><span class="panel-note">匿名行为目录 · {{ analyticsUsersTotal }} 个用户</span><button v-if="canExport" class="button" type="button" @click="downloadUsersCsv">导出用户 CSV</button></div></div>
         <p class="panel-note user-data-note">当前版本按分析 ID 聚合用户行为，不包含手机号、姓名等个人信息。接入 App 用户表后，这里可扩展账号状态、注册来源和登录设备管理。</p>
         <div class="content-toolbar user-toolbar"><input v-model="userSearch" placeholder="搜索匿名用户 ID" aria-label="搜索用户" @keyup.enter="refresh" /><button class="button" type="button" @click="refresh">查询</button></div>
-        <div class="table-wrap"><table><thead><tr><th>用户 ID</th><th>用户类型</th><th>事件数</th><th>首次访问</th><th>最近访问</th><th>平台</th></tr></thead><tbody><tr v-for="user in analyticsUsers" :key="user.analyticsUserId"><td><strong>{{ user.analyticsUserId }}</strong></td><td><span :class="['status', user.analyticsUserId.startsWith('anonymous_') ? 'draft' : 'active']">{{ user.analyticsUserId.startsWith('anonymous_') ? '游客' : '已识别' }}</span></td><td>{{ user.eventCount }}</td><td>{{ new Date(user.firstSeen).toLocaleString() }}</td><td>{{ new Date(user.lastSeen).toLocaleString() }}</td><td>{{ user.platform ?? '-' }}</td></tr></tbody></table><div v-if="!analyticsUsers.length" class="empty">暂无用户行为数据</div></div>
+        <div class="table-wrap"><table><thead><tr><th>用户 ID</th><th>用户类型</th><th>事件数</th><th>首次访问</th><th>最近访问</th><th>平台</th></tr></thead><tbody><tr v-for="user in analyticsUsers" :key="user.analyticsUserId"><td><strong>{{ user.analyticsUserId }}</strong></td><td><span :class="['status', user.analyticsUserId.startsWith('anonymous_') ? 'draft' : 'active']">{{ user.analyticsUserId.startsWith('anonymous_') ? '游客' : '已识别' }}</span></td><td>{{ user.eventCount }}</td><td>{{ new Date(user.firstSeen).toLocaleString() }}</td><td>{{ new Date(user.lastSeen).toLocaleString() }}</td><td>{{ user.platform ?? '-' }}</td></tr></tbody></table><div v-if="!analyticsUsers.length" class="empty">暂无用户行为数据</div></div><div v-if="analyticsUsersTotal" class="catalog-pagination"><span>第 {{ analyticsUsersPage }} / {{ analyticsUsersPageCount }} 页</span><span class="catalog-pagination-total">共 {{ analyticsUsersTotal }} 个用户</span><button class="button" type="button" :disabled="loading || analyticsUsersPage <= 1" @click="changeAnalyticsUsersPage(-1)">上一页</button><button class="button" type="button" :disabled="loading || analyticsUsersPage >= analyticsUsersPageCount" @click="changeAnalyticsUsersPage(1)">下一页</button></div>
       </section>
       <section v-if="activeModule === 'users' && canReadAnalytics" class="panel audit-panel users-center module-panel">
         <div class="panel-heading"><div><p class="eyebrow">APP USER ACCOUNTS</p><h2>App 用户数据</h2></div><span class="panel-note">{{ appUsersTotal }} 个注册账户</span></div>

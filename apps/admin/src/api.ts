@@ -280,12 +280,12 @@ export function fetchNutritionDashboard(token: string, from?: string, to?: strin
   return request<NutritionDashboard>(`/api/admin/v1/analytics/nutrition?${params.toString()}`, token);
 }
 
-export function fetchAnalyticsUsers(token: string, from?: string, to?: string, search?: string) {
-  const params = new URLSearchParams({ limit: '200' });
+export function fetchAnalyticsUsers(token: string, from?: string, to?: string, search?: string, page = 1, pageSize = 50) {
+  const params = new URLSearchParams({ page: String(Math.max(1, page)), pageSize: String(Math.max(1, pageSize)) });
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   if (search) params.set('search', search);
-  return request<{ from: string; to: string; items: AnalyticsUser[] }>(`/api/admin/v1/analytics/users?${params.toString()}`, token);
+  return request<AdminPage<AnalyticsUser> & { from: string; to: string }>(`/api/admin/v1/analytics/users?${params.toString()}`, token);
 }
 
 export function fetchAdminSession(token: string) {

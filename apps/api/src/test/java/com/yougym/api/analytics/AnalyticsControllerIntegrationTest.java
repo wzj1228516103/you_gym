@@ -180,7 +180,10 @@ class AnalyticsControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].analyticsUserId", is("anonymous-user-001")))
                 .andExpect(jsonPath("$.items[0].eventCount", is(1)))
-                .andExpect(jsonPath("$.items[0].platform", is("android")));
+                .andExpect(jsonPath("$.items[0].platform", is("android")))
+                .andExpect(jsonPath("$.total", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.page", is(1)))
+                .andExpect(jsonPath("$.pageSize", is(50)));
         mockMvc.perform(get("/api/admin/v1/analytics/users.csv")
                         .header("X-Admin-Test-Token", "local-admin")
                         .param("from", "2026-08-18T00:00:00Z").param("to", "2026-08-19T00:00:00Z"))

@@ -12,5 +12,10 @@ public interface AnalyticsUserMapper {
     List<AnalyticsUserVO> selectUsers(@Param("from") Instant from,
                                       @Param("to") Instant to,
                                       @Param("search") String search,
-                                      @Param("limit") int limit);
+                                      @Param("limit") int limit,
+                                      @Param("offset") int offset);
+
+    long countUsers(@Param("from") Instant from,
+                    @Param("to") Instant to,
+                    @Param("search") String search);
 }

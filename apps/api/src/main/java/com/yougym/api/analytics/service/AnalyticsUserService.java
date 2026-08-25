@@ -8,6 +8,8 @@ import java.util.List;
 public interface AnalyticsUserService {
     List<AnalyticsUserVO> listUsers(AnalyticsUserQuery query);
 
+    long countUsers(AnalyticsUserQuery query);
+
     CsvExport exportUsersCsv(AnalyticsUserQuery query);
 
     record CsvExport(byte[] content, int count) {}

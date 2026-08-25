@@ -41,14 +41,17 @@ public class AnalyticsUserAdminController {
     public Map<String, Object> users(@RequestParam(required = false) Instant from,
                                      @RequestParam(required = false) Instant to,
                                      @RequestParam(required = false) String search,
-                                     @RequestParam(defaultValue = "200") int limit,
+                                     @RequestParam(defaultValue = "1") int page,
+                                     @RequestParam(defaultValue = "50") int pageSize,
+                                     @RequestParam(required = false) Integer limit,
                                      HttpServletRequest request) {
         var principal = accessService.authorize(request, AdminPermission.ANALYTICS_READ);
-        AnalyticsUserQuery query = query(from, to, search, limit, 1000);
+        AnalyticsUserQuery query = query(from, to, search, page, pageSize, limit, 100);
         auditLogService.record(principal, "ANALYTICS_USERS_VIEWED", "analytics_user", null, request,
                 search == null ? Map.of() : Map.of("search", search));
         List<AnalyticsUserVO> items = analyticsUserService.listUsers(query);
-        return Map.of("from", query.from(), "to", query.to(), "items", items);
+        return Map.of("from", query.from(), "to", query.to(), "items", items,
+                "total", analyticsUserService.countUsers(query), "page", query.page(), "pageSize", query.pageSize());
     }
 
     @GetMapping(value = "/users.csv", produces = "text/csv")
@@ -58,7 +61,7 @@ public class AnalyticsUserAdminController {
                                            @RequestParam(defaultValue = "10000") int limit,
                                            HttpServletRequest request) {
         var principal = accessService.authorize(request, AdminPermission.ANALYTICS_EXPORT);
-        AnalyticsUserQuery query = query(from, to, search, limit, 10000);
+        AnalyticsUserQuery query = query(from, to, search, 1, limit, null, 10000);
         var export = analyticsUserService.exportUsersCsv(query);
         auditLogService.record(principal, "ANALYTICS_USERS_EXPORTED", "analytics_user", null, request,
                 Map.of("count", export.count()));
@@ -68,12 +71,13 @@ public class AnalyticsUserAdminController {
                 .body(export.content());
     }
 
-    private static AnalyticsUserQuery query(Instant from, Instant to, String search, int limit, int maxLimit) {
+    private static AnalyticsUserQuery query(Instant from, Instant to, String search, int page, int pageSize, Integer legacyLimit, int maxPageSize) {
         Instant resolvedTo = to == null ? Instant.now() : to;
         Instant resolvedFrom = from == null ? resolvedTo.minus(30, ChronoUnit.DAYS) : from;
         if (!resolvedFrom.isBefore(resolvedTo)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be before to");
         }
-        return new AnalyticsUserQuery(resolvedFrom, resolvedTo, search, Math.max(1, Math.min(limit, maxLimit)));
+        int safePageSize = legacyLimit == null ? Math.max(1, Math.min(pageSize, maxPageSize)) : Math.max(1, Math.min(legacyLimit, maxPageSize));
+        return new AnalyticsUserQuery(resolvedFrom, resolvedTo, search, Math.max(1, Math.min(page, 100000)), safePageSize);
     }
 }
