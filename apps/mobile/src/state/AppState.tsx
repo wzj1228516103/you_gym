@@ -1,9 +1,17 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { anatomyNodes as localAnatomyNodes, exercises } from '../data/mockData';
 import { mergeAnatomyNodes } from '../data/anatomyMerge';
 import { translateExerciseName } from '../data/exerciseNameZh';
 import { fetchAnatomyTree, fetchExerciseCatalog } from '../services/api';
-import type { AnatomyNode, Exercise } from '../types';
+import type { AnatomyNode, AnatomyTreeNode, Exercise } from '../types';
+
+const ANATOMY_CACHE_KEY = 'you-gym:anatomy-tree-cache:v1';
+const EXERCISE_CACHE_KEY = 'you-gym:exercise-catalog-cache:v1';
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CACHE_MAX_CHARACTERS = 4_000_000;
+
+type CacheEnvelope<T> = { version: 1; savedAt: number; data: T };
 
 type AppStateValue = {
   selectedNodeId: string;
@@ -34,29 +42,46 @@ export function AppStateProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let active = true;
-    void Promise.allSettled([fetchAnatomyTree(), fetchExerciseCatalog()]).then(([treeResult, catalogResult]) => {
-      if (!active) return;
-      if (treeResult.status === 'fulfilled') {
-        const merged = mergeAnatomyNodes(localAnatomyNodes, treeResult.value.items);
-        if (merged.length) {
-          setAnatomyNodes(merged);
-          setSelectedNodeId((current) => merged.some((node) => node.id === current) ? current : merged[0].id);
-          setAnatomySynced(true);
+    const requests = Promise.allSettled([fetchAnatomyTree(), fetchExerciseCatalog()]);
+    void Promise.all([readCache<{ items: AnatomyTreeNode[] }>(ANATOMY_CACHE_KEY), readCache<Exercise[]>(EXERCISE_CACHE_KEY)])
+      .then(([cachedTree, cachedExercises]) => {
+        if (!active) return;
+        if (cachedTree?.items?.length) applyAnatomyTree(cachedTree.items, false);
+        if (cachedExercises?.length) applyCatalog(cachedExercises);
+      })
+      .then(() => requests)
+      .then(([treeResult, catalogResult]) => {
+        if (!active) return;
+        if (treeResult.status === 'fulfilled') {
+          applyAnatomyTree(treeResult.value.items, true);
+          void writeCache(ANATOMY_CACHE_KEY, { items: treeResult.value.items });
         }
-      }
-      if (catalogResult.status === 'fulfilled') {
-        const normalized = catalogResult.value.items.map(toExercise);
-        if (normalized.length > 0) {
-          setCatalogExercises(normalized);
-          setExerciseCatalogSynced(true);
-          setAnatomyNodes((current) => current.map((node) => ({
-            ...node,
-            exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
-          })));
+        if (catalogResult.status === 'fulfilled') {
+          const normalized = catalogResult.value.items.map(toExercise);
+          if (normalized.length > 0) {
+            applyCatalog(normalized);
+            void writeCache(EXERCISE_CACHE_KEY, normalized);
+          }
         }
-      }
-    });
+      });
     return () => { active = false; };
+
+    function applyAnatomyTree(tree: AnatomyTreeNode[], synced: boolean) {
+      const merged = mergeAnatomyNodes(localAnatomyNodes, tree);
+      if (!merged.length) return;
+      setAnatomyNodes(merged);
+      setSelectedNodeId((current) => merged.some((node) => node.id === current) ? current : merged[0].id);
+      if (synced) setAnatomySynced(true);
+    }
+
+    function applyCatalog(normalized: Exercise[]) {
+      setCatalogExercises(normalized);
+      setExerciseCatalogSynced(true);
+      setAnatomyNodes((current) => current.map((node) => ({
+        ...node,
+        exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
+      })));
+    }
   }, []);
 
   const value = useMemo<AppStateValue>(() => ({
@@ -74,6 +99,27 @@ export function AppStateProvider({ children }: PropsWithChildren) {
   }), [activeExercises, anatomyNodes, anatomySynced, exerciseCatalogSynced, selectedNode, selectedNodeId, todayExerciseIds, todayExercises]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
+}
+
+async function readCache<T>(key: string): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw || raw.length > CACHE_MAX_CHARACTERS) return null;
+    const cached = JSON.parse(raw) as Partial<CacheEnvelope<T>>;
+    if (cached.version !== 1 || typeof cached.savedAt !== 'number' || !cached.data) return null;
+    return Date.now() - cached.savedAt <= CACHE_MAX_AGE_MS ? cached.data : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCache<T>(key: string, data: T) {
+  try {
+    const raw = JSON.stringify({ version: 1, savedAt: Date.now(), data } satisfies CacheEnvelope<T>);
+    if (raw.length <= CACHE_MAX_CHARACTERS) await AsyncStorage.setItem(key, raw);
+  } catch {
+    // Cache failures must never block the network refresh or local fallback.
+  }
 }
 
 function matchesAnatomyNode(exercise: Exercise, node: AnatomyNode) {
