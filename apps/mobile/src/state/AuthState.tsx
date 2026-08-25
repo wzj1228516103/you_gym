@@ -1,5 +1,5 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { AppUser, clearSession, fetchMe, loadStoredSession, saveSession, updateMe } from '../services/api';
+import { AppUser, clearSession, fetchMe, loadStoredSession, logoutApp, saveSession, updateMe } from '../services/api';
 import { setAnalyticsUser } from '../services/analytics';
 
 type AuthStateValue = {
@@ -17,7 +17,7 @@ export function AuthStateProvider({ children }: PropsWithChildren) {
     authenticate: async (accessToken, current) => { setToken(accessToken); setUser(current); setGuest(false); setAnalyticsUser(current.id); await saveSession({ accessToken, user: current }); },
     continueAsGuest: () => { setGuest(true); setToken(null); setUser(null); setAnalyticsUser(null); },
     updateProfile: async (input) => { if (!token) throw new Error('请先登录'); const current = await updateMe(token, input); setUser(current); await saveSession({ accessToken: token, user: current }); return current; },
-    logout: async () => { setToken(null); setUser(null); setGuest(false); setAnalyticsUser(null); await clearSession(); },
+    logout: async () => { const currentToken = token; setToken(null); setUser(null); setGuest(false); setAnalyticsUser(null); try { if (currentToken) await logoutApp(currentToken); } finally { await clearSession(); } },
   }), [guest, loading, token, user]);
   return <AuthStateContext.Provider value={value}>{children}</AuthStateContext.Provider>;
 }

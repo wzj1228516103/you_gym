@@ -31,10 +31,15 @@ management:
         include: health,info
 
 yougym:
+  runtime:
+    environment: ${YOUGYM_ENVIRONMENT:local}
+  web:
+    allowed-origins: ${YOUGYM_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
   admin:
     test-token: ${YOUGYM_ADMIN_TEST_TOKEN:local-admin}
     test-role: ${YOUGYM_ADMIN_TEST_ROLE:SUPER_ADMIN}
     employee-token: ${YOUGYM_ADMIN_EMPLOYEE_TOKEN:local-employee}
+    test-access-enabled: ${YOUGYM_ADMIN_TEST_ACCESS_ENABLED:true}
     bootstrap-enabled: ${YOUGYM_ADMIN_BOOTSTRAP_ENABLED:false}
     bootstrap-username: ${YOUGYM_ADMIN_BOOTSTRAP_USERNAME:}
     bootstrap-password: ${YOUGYM_ADMIN_BOOTSTRAP_PASSWORD:}
@@ -45,6 +50,7 @@ yougym:
   integrations:
     mode: ${YOUGYM_INTEGRATION_MODE:mock}
     test-token: ${YOUGYM_INTEGRATION_TEST_TOKEN:local-only}
+    test-endpoints-enabled: ${YOUGYM_INTEGRATION_TEST_ENDPOINTS_ENABLED:true}
     sms:
       access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID:}
       access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET:}

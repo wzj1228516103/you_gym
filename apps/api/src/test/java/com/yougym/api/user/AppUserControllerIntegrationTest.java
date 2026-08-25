@@ -49,5 +49,9 @@ class AppUserControllerIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)));
         mockMvc.perform(get("/api/admin/v1/app-users/nutrition").header("X-Admin-Test-Token", "local-admin"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)));
+        mockMvc.perform(post("/api/v1/auth/logout").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.loggedOut", is(true)));
+        mockMvc.perform(get("/api/v1/me").header("Authorization", authorization))
+                .andExpect(status().isUnauthorized());
     }
 }

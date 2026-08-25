@@ -7,6 +7,7 @@ public class AdminProperties {
     private String testToken = "local-admin";
     private AdminRole testRole = AdminRole.SUPER_ADMIN;
     private String employeeToken = "local-employee";
+    private boolean testAccessEnabled = true;
     private boolean bootstrapEnabled;
     private String bootstrapUsername = "";
     private String bootstrapPassword = "";
@@ -21,6 +22,8 @@ public class AdminProperties {
     public void setTestRole(AdminRole testRole) { this.testRole = testRole; }
     public String getEmployeeToken() { return employeeToken; }
     public void setEmployeeToken(String employeeToken) { this.employeeToken = employeeToken; }
+    public boolean isTestAccessEnabled() { return testAccessEnabled; }
+    public void setTestAccessEnabled(boolean testAccessEnabled) { this.testAccessEnabled = testAccessEnabled; }
     public boolean isBootstrapEnabled() { return bootstrapEnabled; }
     public void setBootstrapEnabled(boolean bootstrapEnabled) { this.bootstrapEnabled = bootstrapEnabled; }
     public String getBootstrapUsername() { return bootstrapUsername; }

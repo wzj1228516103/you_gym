@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class IntegrationProperties {
     private String mode = "mock";
     private String testToken = "local-only";
+    private boolean testEndpointsEnabled = true;
     private Sms sms = new Sms();
     private Email email = new Email();
     private Oss oss = new Oss();
@@ -14,6 +15,8 @@ public class IntegrationProperties {
     public void setMode(String mode) { this.mode = mode; }
     public String getTestToken() { return testToken; }
     public void setTestToken(String testToken) { this.testToken = testToken; }
+    public boolean isTestEndpointsEnabled() { return testEndpointsEnabled; }
+    public void setTestEndpointsEnabled(boolean testEndpointsEnabled) { this.testEndpointsEnabled = testEndpointsEnabled; }
     public Sms getSms() { return sms; }
     public void setSms(Sms sms) { this.sms = sms; }
     public Email getEmail() { return email; }

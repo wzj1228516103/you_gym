@@ -76,6 +76,7 @@ export async function saveSession(session: { accessToken: string; user: AppUser 
 export async function clearSession() { await AsyncStorage.removeItem(SESSION_KEY); }
 export function sendSmsCode(phone: string, purpose: 'LOGIN' | 'REGISTER') { return request<{ accepted: boolean; mockMode: boolean; expiresInSeconds: number }>('/api/v1/auth/sms/code', { method: 'POST', body: JSON.stringify({ phone, purpose }) }); }
 export function verifySmsCode(phone: string, purpose: 'LOGIN' | 'REGISTER', code: string) { return request<{ accessToken: string; user: AppUser; needsOnboarding: boolean }>('/api/v1/auth/sms/verify', { method: 'POST', body: JSON.stringify({ phone, purpose, code }) }); }
+export function logoutApp(token: string) { return request<{ loggedOut: boolean }>('/api/v1/auth/logout', { method: 'POST' }, token); }
 export function fetchMe(token: string) { return request<AppUser>('/api/v1/me', {}, token); }
 export function updateMe(token: string, input: Partial<AppUser>) { return request<AppUser>('/api/v1/me', { method: 'PATCH', body: JSON.stringify(input) }, token); }
 export function saveWorkout(token: string, input: Record<string, unknown>) { return request<{ saved: boolean }>('/api/v1/me/workouts', { method: 'POST', body: JSON.stringify(input) }, token); }
@@ -88,5 +89,5 @@ export function fetchExerciseCatalog(search?: string, equipment?: string) { cons
 export function fetchExercise(id: string) { return request<ExerciseCatalogItem>(`/api/v1/exercises/${encodeURIComponent(id)}`); }
 export function fetchPlans(category?: string, search?: string) { const query = new URLSearchParams({ limit: '100' }); if (category && category !== '全部') query.set('category', category); if (search) query.set('search', search); return request<{ items: PlanSummary[] }>(`/api/v1/plans?${query.toString()}`); }
 export function fetchPlan(id: string) { return request<PlanDetail>(`/api/v1/plans/${encodeURIComponent(id)}`); }
-export function fetchFoods(search?: string) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); return request<{ items: FoodItem[] }>(`/api/v1/foods?${query.toString()}`); }
+export function fetchFoods(search?: string, signal?: AbortSignal) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); return request<{ items: FoodItem[] }>(`/api/v1/foods?${query.toString()}`, { signal }); }
 export function fetchFood(id: string) { return request<FoodItem>(`/api/v1/foods/${encodeURIComponent(id)}`); }

@@ -4,6 +4,7 @@ import com.yougym.api.audit.AuditLogService;
 import com.yougym.api.config.AdminAccessService;
 import com.yougym.api.config.AdminPermission;
 import com.yougym.api.content.ContentRepository;
+import com.yougym.api.catalog.service.FoodCatalogService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -35,15 +36,17 @@ public class MediaUploadController {
     private final IntegrationService integrationService;
     private final MockObjectStorageGateway mockStorage;
     private final ContentRepository contentRepository;
+    private final FoodCatalogService foodCatalogService;
 
     public MediaUploadController(AdminAccessService accessService, AuditLogService auditLogService,
                                  IntegrationService integrationService, MockObjectStorageGateway mockStorage,
-                                 ContentRepository contentRepository) {
+                                 ContentRepository contentRepository, FoodCatalogService foodCatalogService) {
         this.accessService = accessService;
         this.auditLogService = auditLogService;
         this.integrationService = integrationService;
         this.mockStorage = mockStorage;
         this.contentRepository = contentRepository;
+        this.foodCatalogService = foodCatalogService;
     }
 
     @PostMapping(value = "/media-upload/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -127,8 +130,9 @@ public class MediaUploadController {
     public void deleteMedia(@RequestParam String objectName, HttpServletRequest request) {
         var principal = accessService.authorize(request, AdminPermission.CONTENT_MANAGE);
         if (!isContentObjectName(objectName)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid content media object name");
-        if (contentRepository.isMediaObjectReferenced(objectName)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "media is still referenced by content");
+        if (contentRepository.isMediaObjectReferenced(objectName)
+                || foodCatalogService.isMediaObjectReferenced(objectName)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "media is still referenced");
         }
         if (!integrationService.deleteObject(objectName)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "media not found");
         auditLogService.record(principal, "CONTENT_MEDIA_DELETED", "content_media", objectName, request, Map.of());

@@ -65,6 +65,9 @@ public class IntegrationController {
     }
 
     private void authorize(String token) {
+        if (!properties.isTestEndpointsEnabled()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "integration test endpoint is disabled");
+        }
         if (token == null || !token.equals(properties.getTestToken())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid integration test token");
         }

@@ -38,6 +38,9 @@ public class AdminAccessService {
     }
 
     public AdminPrincipal resolve(String token) {
+        if (!properties.isTestAccessEnabled()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "admin test access is disabled");
+        }
         if (same(token, properties.getTestToken())) {
             return new AdminPrincipal("local-admin", properties.getTestRole());
         }

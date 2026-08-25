@@ -15,16 +15,18 @@ import java.util.UUID;
 public class FoodCatalogService {
     private static final java.util.Set<String> STATUSES = java.util.Set.of("ACTIVE", "INACTIVE");
     private final FoodCatalogMapper mapper;
+    private final FoodMediaUrlResolver mediaUrlResolver;
 
-    public FoodCatalogService(FoodCatalogMapper mapper) {
+    public FoodCatalogService(FoodCatalogMapper mapper, FoodMediaUrlResolver mediaUrlResolver) {
         this.mapper = mapper;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     public List<Map<String, Object>> find(String search, String status, int limit) {
         if (status != null && !status.isBlank() && !STATUSES.contains(status)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid food status");
         }
-        return mapper.find(search, status, Math.max(1, Math.min(limit, 500)));
+        return mediaUrlResolver.resolveMany(mapper.find(search, status, Math.max(1, Math.min(limit, 500))));
     }
 
     public Map<String, Object> create(String requestedId, String name, String serving, BigDecimal calories,
@@ -38,7 +40,7 @@ public class FoodCatalogService {
         List<MediaAsset> assets = normalizeMedia(mediaAssets);
         mapper.insert(id, normalize(name, "name"), normalize(serving, "serving"), calories, protein, carbs, fat,
                 normalize(source, "source"), status, primaryUrl(mediaUrl, assets), assets, now);
-        return mapper.findById(id);
+        return mediaUrlResolver.resolveOne(mapper.findById(id));
     }
 
     public Map<String, Object> update(String id, String name, String serving, BigDecimal calories,
@@ -54,19 +56,23 @@ public class FoodCatalogService {
         List<MediaAsset> assets = normalizeMedia(mediaAssets);
         mapper.update(id, normalize(name, "name"), normalize(serving, "serving"), calories, protein, carbs, fat,
                 normalize(source, "source"), primaryUrl(mediaUrl, assets), assets, now);
-        return mapper.findById(id);
+        return mediaUrlResolver.resolveOne(mapper.findById(id));
     }
 
     public Map<String, Object> changeStatus(String id, String status) {
         requireExisting(id);
         String normalized = normalizeStatus(status);
         mapper.updateStatus(id, normalized, Instant.now());
-        return mapper.findById(id);
+        return mediaUrlResolver.resolveOne(mapper.findById(id));
     }
 
     public void delete(String id) {
         requireExisting(id);
         if (!mapper.delete(id)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "food not found");
+    }
+
+    public boolean isMediaObjectReferenced(String objectName) {
+        return mapper.isMediaObjectReferenced(objectName);
     }
 
     private void requireExisting(String id) {

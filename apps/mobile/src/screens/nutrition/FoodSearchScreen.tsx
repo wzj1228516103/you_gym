@@ -13,14 +13,19 @@ type Props = NativeStackScreenProps<NutritionStackParamList, 'FoodSearch'>;
 
 export function FoodSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
   useFocusEffect(useCallback(() => {
     let active = true; setLoading(true);
     void fetchFoods(query).then((result) => { if (active) { setResults(result.items); setError(null); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '食物加载失败'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [query]));
+  }, [debouncedQuery]));
   useEffect(() => { trackEvent('nutrition_food_search_opened', { source: 'nutrition_home' }, { screenId: 'food_search' }); }, []);
   return (
     <AppScreen keyboard>

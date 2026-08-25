@@ -10,6 +10,7 @@ import java.util.Map;
 public interface AppUserService {
     Map<String, Object> sendCode(SendCodeRequest request);
     SessionVO verifyCode(VerifyCodeRequest request);
+    void logout(String bearerToken);
     AppUserVO me(String bearerToken);
     AppUserVO updateProfile(String bearerToken, UpdateProfileRequest request);
     void recordWorkout(String bearerToken, CreateWorkoutRecordRequest request);

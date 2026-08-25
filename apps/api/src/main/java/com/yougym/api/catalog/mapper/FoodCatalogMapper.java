@@ -73,6 +73,15 @@ public class FoodCatalogMapper {
         return jdbc.update("DELETE FROM food_catalog WHERE id=?", id) > 0;
     }
 
+    public boolean isMediaObjectReferenced(String objectName) {
+        if (objectName == null || objectName.isBlank()) return false;
+        return jdbc.query("SELECT media_url, media_assets_json FROM food_catalog", (rs, rowNum) -> {
+            if (objectName.equals(rs.getString("media_url"))) return true;
+            return parseMedia(rs.getString("media_assets_json")).stream()
+                    .anyMatch(asset -> objectName.equals(String.valueOf(asset.get("objectName"))));
+        }).stream().anyMatch(Boolean::booleanValue);
+    }
+
     private Map<String, Object> copy(Map<String, Object> row) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", value(row, "id"));
