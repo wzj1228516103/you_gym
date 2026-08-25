@@ -119,6 +119,9 @@ public class MediaUploadController {
     @GetMapping("/media-url")
     public Map<String, Object> mediaUrl(@RequestParam String objectName, HttpServletRequest request) {
         var principal = accessService.authorize(request, AdminPermission.CONTENT_READ);
+        if (!isContentObjectName(objectName)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid content media object name");
+        }
         ObjectStorageGateway.ResolvedUrl resolved = integrationService.resolveObjectUrl(objectName);
         auditLogService.record(principal, "CONTENT_MEDIA_URL_REFRESHED", "content_media", objectName, request, Map.of());
         return Map.of("code", 200, "msg", "success", "data", Map.of(

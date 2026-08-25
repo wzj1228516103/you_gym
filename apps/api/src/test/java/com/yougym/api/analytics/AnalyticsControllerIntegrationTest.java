@@ -290,6 +290,11 @@ class AnalyticsControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.url", startsWith("/api/file/mock-media")))
                 .andExpect(jsonPath("$.data.expiresIn", is(0)));
 
+        mockMvc.perform(get("/api/file/media-url")
+                        .param("objectName", "private/secret.txt")
+                        .header("X-Admin-Test-Token", "local-employee"))
+                .andExpect(status().isBadRequest());
+
         String contentWithStaleUrl = """
                 {"title":"媒体链接刷新测试","contentType":"ARTICLE","mediaUrl":"https://stale.test/cover.png","mediaAssets":[
                   {"url":"https://stale.test/cover.png","objectName":"%s","fileName":"cover.png","fileSize":4,"fileType":"image/png","fileETag":"etag-test"}
