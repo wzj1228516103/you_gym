@@ -51,7 +51,7 @@ export type PlanSummary = {
 export type PlanDetail = PlanSummary & {
   exercises: { id: string; nameZh: string; nameEn: string; equipment: string; location: string; sets: number; reps: string; restSeconds: number; sortOrder: number }[];
 };
-export type FoodItem = { id: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string };
+export type FoodItem = { id: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; mediaUrl?: string | null; mediaAssets?: { url: string; objectName?: string; fileName?: string; fileType?: string }[] };
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.ok) return response.status === 204 ? undefined as T : response.json() as Promise<T>;

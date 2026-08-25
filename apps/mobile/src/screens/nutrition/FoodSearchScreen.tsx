@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { ChevronRight, Search, X } from 'lucide-react-native';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, Card, IconButton, ScreenHeader } from '../../components/ui';
-import { fetchFoods, FoodItem } from '../../services/api';
+import { API_BASE_URL, fetchFoods, FoodItem } from '../../services/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
 import { trackEvent } from '../../services/analytics';
@@ -12,7 +12,7 @@ import { trackEvent } from '../../services/analytics';
 type Props = NativeStackScreenProps<NutritionStackParamList, 'FoodSearch'>;
 
 export function FoodSearchScreen({ navigation }: Props) {
-  const [query, setQuery] = useState('鸡胸肉');
+  const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +30,7 @@ export function FoodSearchScreen({ navigation }: Props) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {results.map((food) => (
         <Card key={food.id} onPress={() => { trackEvent('nutrition_item_selected', { foodId: food.id, source: 'food_search' }, { screenId: 'food_search' }); navigation.navigate('FoodDetail', { foodId: food.id }); }} accessibilityLabel={`查看${food.name}`} style={styles.foodCard}>
-          <View style={styles.foodArt}><Text style={styles.foodEmoji}>◉</Text></View>
+          <View style={styles.foodArt}><FoodThumbnail food={food} /></View>
           <View style={styles.foodCopy}><Text style={styles.foodName}>{food.name}</Text><Text style={styles.foodMeta}>{food.serving} · {food.calories} kcal</Text></View>
           <Text style={styles.source}>{food.source}</Text>
           <ChevronRight size={17} color={colors.textTertiary} />
@@ -40,12 +40,20 @@ export function FoodSearchScreen({ navigation }: Props) {
   );
 }
 
+function FoodThumbnail({ food }: { food: FoodItem }) {
+  const asset = food.mediaAssets?.find((candidate) => candidate.fileType?.startsWith('image/')) ?? food.mediaAssets?.[0];
+  const source = asset?.url ?? food.mediaUrl ?? undefined;
+  const url = source?.startsWith('http') ? source : source ? `${API_BASE_URL}${source}` : undefined;
+  return url ? <Image source={{ uri: url }} resizeMode="cover" style={styles.foodImage} /> : <Text style={styles.foodEmoji}>◉</Text>;
+}
+
 const styles = StyleSheet.create({
   searchBox: { minHeight: 50, borderRadius: radius.control, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.control, flexDirection: 'row', alignItems: 'center', gap: spacing.x2, paddingLeft: spacing.x3 },
   input: { flex: 1, minHeight: 48, ...typography.body, color: colors.text, outlineStyle: 'none' } as never,
   count: { ...typography.caption, color: colors.textSecondary, marginVertical: spacing.x4 },
   foodCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3, marginBottom: spacing.x2, padding: spacing.x3 },
   foodArt: { width: 56, height: 56, borderRadius: radius.card, backgroundColor: '#20230F', alignItems: 'center', justifyContent: 'center' },
+  foodImage: { width: '100%', height: '100%', borderRadius: radius.card },
   foodEmoji: { fontSize: 25, color: colors.primary },
   foodCopy: { flex: 1 },
   foodName: { ...typography.listTitle, color: colors.text },
