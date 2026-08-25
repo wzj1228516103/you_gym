@@ -10,6 +10,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 @Repository
 public class AnalyticsEventRepository {
@@ -70,6 +72,30 @@ public class AnalyticsEventRepository {
                 rs.getString("session_id"), rs.getString("analytics_user_id"),
                 rs.getString("platform"), rs.getString("properties_json")),
                 Timestamp.from(from), Timestamp.from(to));
+    }
+
+    /**
+     * Processes dashboard rows as they are read so large time ranges do not
+     * require retaining every raw event in memory at once.
+     */
+    public long forEachDashboardEvent(Instant from, Instant to, Consumer<DashboardEventRow> consumer) {
+        AtomicLong count = new AtomicLong();
+        jdbcTemplate.query("""
+                SELECT event_name, occurred_at, session_id, analytics_user_id, platform, properties_json
+                FROM analytics_event
+                WHERE occurred_at >= ? AND occurred_at < ?
+                ORDER BY occurred_at ASC
+                """, resultSet -> {
+            while (resultSet.next()) {
+                consumer.accept(new DashboardEventRow(
+                        resultSet.getString("event_name"), resultSet.getTimestamp("occurred_at").toInstant(),
+                        resultSet.getString("session_id"), resultSet.getString("analytics_user_id"),
+                        resultSet.getString("platform"), resultSet.getString("properties_json")));
+                count.incrementAndGet();
+            }
+            return null;
+        }, Timestamp.from(from), Timestamp.from(to));
+        return count.get();
     }
 
     private AnalyticsEventRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

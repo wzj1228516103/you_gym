@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class AnalyticsDashboardService {
@@ -37,7 +38,6 @@ public class AnalyticsDashboardService {
     }
 
     public Dashboard dashboard(Instant from, Instant to, ZoneId zoneId) {
-        List<AnalyticsEventRepository.DashboardEventRow> events = repository.findForDashboard(from, to);
         Set<String> users = new LinkedHashSet<>();
         Set<String> sessions = new LinkedHashSet<>();
         Map<String, MutableSeriesPoint> trend = new TreeMap<>();
@@ -45,9 +45,9 @@ public class AnalyticsDashboardService {
         Map<String, MutableCount> platformCounts = new LinkedHashMap<>();
         Map<String, MutableCount> anatomyCounts = new LinkedHashMap<>();
         Map<String, MutableCount> funnelCounts = new LinkedHashMap<>();
-        long uploadFailures = 0;
+        AtomicLong uploadFailures = new AtomicLong();
 
-        for (var event : events) {
+        long eventCount = repository.forEachDashboardEvent(from, to, event -> {
             addIdentity(users, event.analyticsUserId());
             addIdentity(sessions, event.sessionId());
             String date = LocalDate.ofInstant(event.occurredAt(), zoneId).toString();
@@ -62,7 +62,7 @@ public class AnalyticsDashboardService {
                     .add(event.analyticsUserId());
             funnelCounts.computeIfAbsent(event.eventName(), ignored -> new MutableCount())
                     .add(event.analyticsUserId());
-            if ("analytics_upload_failed".equals(event.eventName())) uploadFailures++;
+            if ("analytics_upload_failed".equals(event.eventName())) uploadFailures.incrementAndGet();
 
             if ("body_region_selected".equals(event.eventName()) || "muscle_selected".equals(event.eventName())) {
                 Map<String, Object> properties = properties(event.propertiesJson());
@@ -70,7 +70,7 @@ public class AnalyticsDashboardService {
                 if (label != null) anatomyCounts.computeIfAbsent(label, ignored -> new MutableCount())
                         .add(event.analyticsUserId());
             }
-        }
+        });
 
         List<TrendPoint> trendPoints = trend.entrySet().stream()
                 .map(entry -> new TrendPoint(entry.getKey(), entry.getValue().eventCount, entry.getValue().users.size()))
@@ -82,10 +82,10 @@ public class AnalyticsDashboardService {
             MutableCount count = funnelCounts.getOrDefault(step.eventName(), new MutableCount());
             return new FunnelItem(step.eventName(), step.label(), count.count, count.users.size());
         }).toList();
-        double failureRate = events.isEmpty() ? 0 : (double) uploadFailures / events.size();
+        double failureRate = eventCount == 0 ? 0 : (double) uploadFailures.get() / eventCount;
 
         return new Dashboard(from, to, zoneId.getId(),
-                new Kpis(events.size(), users.size(), sessions.size(), uploadFailures, failureRate),
+                new Kpis(eventCount, users.size(), sessions.size(), uploadFailures.get(), failureRate),
                 trendPoints, eventDistribution, anatomyRanking, funnel, platformDistribution);
     }
 
