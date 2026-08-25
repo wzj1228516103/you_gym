@@ -303,6 +303,12 @@ export function fetchAppUsers(token: string, search?: string) { const params = n
 export function fetchAppWorkouts(token: string, userId?: string) { const params = new URLSearchParams({ limit: '200' }); if (userId) params.set('userId', userId); return request<{ items: WorkoutRecord[] }>(`/api/admin/v1/app-users/workouts?${params.toString()}`, token); }
 export function fetchAppNutrition(token: string, userId?: string) { const params = new URLSearchParams({ limit: '200' }); if (userId) params.set('userId', userId); return request<{ items: NutritionRecord[] }>(`/api/admin/v1/app-users/nutrition?${params.toString()}`, token); }
 export function fetchAdminExerciseCatalog(token: string, search?: string) { const params = new URLSearchParams({ limit: '100' }); if (search) params.set('search', search); return request<{ source: string; total: number; items: ExerciseCatalogItem[] }>(`/api/admin/v1/exercise-catalog?${params.toString()}`, token); }
+export type ExerciseCatalogInput = { nameZh: string; nameEn: string; targetMuscles: string[]; equipment: string; location: string; difficultyLevel: string; recommendedReps: string; recommendedSets: string; restSecondsMin: number | null; restSecondsMax: number | null; sourceNote: string };
+export async function updateAdminExerciseCatalog(token: string, id: string, input: ExerciseCatalogInput) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/v1/exercise-catalog/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  if (!response.ok) throw new Error(response.status === 404 ? '动作不存在' : `更新动作失败（${response.status}）`);
+  return response.json() as Promise<ExerciseCatalogItem>;
+}
 export function fetchAdminFoodCatalog(token: string, search?: string, status?: FoodCatalogItem['status'] | '') { const params = new URLSearchParams({ limit: '500' }); if (search) params.set('search', search); if (status) params.set('status', status); return request<{ items: FoodCatalogItem[] }>(`/api/admin/v1/food-catalog?${params.toString()}`, token); }
 
 export type FoodCatalogInput = { id?: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; status?: FoodCatalogItem['status']; mediaUrl?: string; mediaAssets?: CatalogMediaAsset[] };

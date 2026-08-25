@@ -59,6 +59,19 @@ public class ExerciseCatalogMapper {
         return withParsedFields(rows.get(0), true, resources);
     }
 
+    public boolean exists(String id) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM exercise_catalog WHERE id=?", Integer.class, id);
+        return count != null && count > 0;
+    }
+
+    public void update(String id, String nameZh, String nameEn, List<String> targetMuscles, String equipment,
+                       String location, String difficultyLevel, String recommendedReps, String recommendedSets,
+                       Integer restSecondsMin, Integer restSecondsMax, String sourceNote) {
+        jdbc.update("UPDATE exercise_catalog SET name_zh=?,name_en=?,target_muscles_json=?,equipment=?,location=?,difficulty_level=?,recommended_reps=?,recommended_sets=?,rest_seconds_min=?,rest_seconds_max=?,source_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                nameZh, nameEn, json(targetMuscles), equipment, location, difficultyLevel, recommendedReps, recommendedSets,
+                restSecondsMin, restSecondsMax, sourceNote, id);
+    }
+
     private Map<String, Object> withParsedFields(Map<String, Object> row, boolean includeDatasetDetail, List<Map<String, Object>> resources) {
         var result = new LinkedHashMap<String, Object>();
         result.put("id", value(row, "id")); result.put("nameZh", value(row, "nameZh")); result.put("nameEn", value(row, "nameEn"));
@@ -95,6 +108,11 @@ public class ExerciseCatalogMapper {
         result.put("sortOrder", value(row, "sortOrder"));
         result.put("sourceImage", value(row, "sourceImage"));
         return result;
+    }
+
+    private String json(Object value) {
+        try { return objectMapper.writeValueAsString(value == null ? List.of() : value); }
+        catch (Exception exception) { throw new IllegalArgumentException("invalid exercise target muscles", exception); }
     }
 
     private void addDatasetDetail(Map<String, Object> result, Object exerciseId) {

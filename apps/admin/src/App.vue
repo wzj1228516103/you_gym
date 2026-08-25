@@ -11,10 +11,10 @@ import {
   createAdminAccount, createContent, downloadAnalyticsCsv, downloadAnalyticsUsersCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchAnalyticsUsers, fetchContent, fetchNutritionDashboard,
   deleteContent, deleteContentMedia, logoutAdmin, revokeAdminSession, revokeOtherAdminSessions, updateAdminAccount, updateContent, updateContentStatus, uploadContentMedia,
-  fetchAdminExerciseCatalog, fetchAdminFoodCatalog, createFoodCatalogItem, updateFoodCatalogItem, updateFoodCatalogStatus, deleteFoodCatalogItem,
+  fetchAdminExerciseCatalog, updateAdminExerciseCatalog, fetchAdminFoodCatalog, createFoodCatalogItem, updateFoodCatalogItem, updateFoodCatalogStatus, deleteFoodCatalogItem,
   fetchAppNutrition, fetchAppUsers, fetchAppWorkouts,
   type AdminAccount, type AdminRole, type AdminSessionView, type AnalyticsDashboard, type AnalyticsEvent, type AnalyticsUser, type NutritionDashboard, type AppUser, type WorkoutRecord, type NutritionRecord, type ExerciseCatalogItem, type FoodCatalogItem, type FoodCatalogInput,
-  type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType,
+  type AnalyticsSummary, type AuditLog, type AnatomyNode, type ContentItem, type ContentMediaAsset, type ContentStatus, type ContentType, type ExerciseCatalogInput,
   resolveMediaUrl,
 } from './api';
 
@@ -37,6 +37,11 @@ const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
 const exerciseCatalogItems = ref<ExerciseCatalogItem[]>([]);
 const exerciseCatalogTotal = ref(0);
+const exerciseEditingId = ref<string | null>(null);
+const exerciseFormOpen = ref(false);
+const exerciseLoading = ref(false);
+const exerciseForm = ref<ExerciseCatalogInput>({ nameZh: '', nameEn: '', targetMuscles: [], equipment: '', location: '健身房', difficultyLevel: 'UNSPECIFIED', recommendedReps: '', recommendedSets: '', restSecondsMin: null, restSecondsMax: null, sourceNote: '' });
+const exerciseTargetsText = ref('');
 const nutrition = ref<NutritionDashboard | null>(null);
 const analyticsUsers = ref<AnalyticsUser[]>([]);
 const appUsers = ref<AppUser[]>([]);
@@ -74,6 +79,7 @@ const contentUploadInput = ref<HTMLInputElement | null>(null);
 const contentForm = ref({ title: '', contentType: 'ARTICLE' as ContentType, summary: '', body: '', mediaUrl: '', mediaAssets: [] as ContentMediaAsset[], anatomyNodeId: '' });
 const accountForm = ref({ username: '', displayName: '', password: '', role: 'EMPLOYEE' as AdminRole });
 const accountLoading = ref(false);
+const previewMedia = ref<{ url: string; label: string; kind: 'image' | 'video' } | null>(null);
 
 type AdminModule = 'dashboard' | 'analytics' | 'users' | 'nutrition' | 'content' | 'anatomy' | 'review' | 'system' | 'audit';
 const moduleFromHash = (): AdminModule => {
@@ -147,6 +153,45 @@ async function refreshExerciseCatalog() {
   const result = await fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined);
   exerciseCatalogItems.value = result.items;
   exerciseCatalogTotal.value = result.total;
+}
+function resetExerciseForm() {
+  exerciseEditingId.value = null;
+  exerciseFormOpen.value = false;
+  exerciseForm.value = { nameZh: '', nameEn: '', targetMuscles: [], equipment: '', location: '健身房', difficultyLevel: 'UNSPECIFIED', recommendedReps: '', recommendedSets: '', restSecondsMin: null, restSecondsMax: null, sourceNote: '' };
+  exerciseTargetsText.value = '';
+}
+function editExercise(item: ExerciseCatalogItem) {
+  exerciseEditingId.value = item.id;
+  exerciseFormOpen.value = true;
+  exerciseForm.value = { nameZh: item.nameZh, nameEn: item.nameEn ?? '', targetMuscles: [...item.targetMuscles], equipment: item.equipment ?? '', location: item.location ?? '健身房', difficultyLevel: item.difficultyLevel ?? 'UNSPECIFIED', recommendedReps: item.recommendedReps ?? '', recommendedSets: item.recommendedSets == null ? '' : String(item.recommendedSets), restSecondsMin: item.restSecondsMin, restSecondsMax: item.restSecondsMax, sourceNote: item.sourceNote ?? '' };
+  exerciseTargetsText.value = item.targetMuscles.join(', ');
+}
+async function saveExercise() {
+  if (!exerciseEditingId.value) return;
+  const targets = exerciseTargetsText.value.split(/[、,\n]+/).flatMap((value) => value.split(',')).map((item) => item.trim()).filter(Boolean);
+  if (!targets.length) { error.value = '至少填写一个目标肌群代码'; return; }
+  exerciseLoading.value = true;
+  try {
+    await updateAdminExerciseCatalog(token.value, exerciseEditingId.value, { ...exerciseForm.value, targetMuscles: Array.from(new Set(targets)) });
+    resetExerciseForm();
+    await refreshExerciseCatalog();
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : '更新动作失败'; }
+  finally { exerciseLoading.value = false; }
+}
+function openMediaPreview(url: string, label: string, kind?: 'image' | 'video') {
+  const resolved = resolveMediaUrl(url);
+  if (!resolved) return;
+  previewMedia.value = { url: resolved, label, kind: kind ?? (isVideoUrl(url) ? 'video' : 'image') };
+}
+function closeMediaPreview() { previewMedia.value = null; }
+function handleMediaPreviewClick(event: MouseEvent) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const anchor = target.closest('.catalog-resource-strip a');
+  if (!(anchor instanceof HTMLAnchorElement)) return;
+  if (!anchor.querySelector('img, video')) return;
+  event.preventDefault();
+  openMediaPreview(anchor.href, anchor.title || '媒体预览', Boolean(anchor.querySelector('video')) ? 'video' : undefined);
 }
 async function refreshFoodCatalog() { if (!canReadAnalytics.value) return; foodCatalogItems.value = (await fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined)).items; }
 
@@ -431,10 +476,11 @@ async function downloadNutritionEventsCsv() { try { if (!canExport.value) return
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
 onMounted(() => {
   window.addEventListener('hashchange', syncModuleFromHash);
+  document.addEventListener('click', handleMediaPreviewClick);
   if (!window.location.hash) window.history.replaceState(null, '', '#/dashboard');
   if (token.value) void refresh();
 });
-onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHash));
+onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromHash); document.removeEventListener('click', handleMediaPreviewClick); });
 </script>
 
 <template>
@@ -531,7 +577,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
             </div>
             <div v-if="foodForm.mediaAssets?.length" class="content-media-list food-media-list">
               <div v-for="(asset, index) in foodForm.mediaAssets" :key="asset.objectName" class="content-media-item">
-                <img v-if="asset.fileType.startsWith('image/')" :src="resolveMediaUrl(asset.url)" :alt="asset.fileName" />
+              <img v-if="asset.fileType.startsWith('image/')" :src="resolveMediaUrl(asset.url)" :alt="asset.fileName" @click="openMediaPreview(asset.url, asset.fileName, 'image')" />
                 <video v-else-if="asset.fileType.startsWith('video/')" :src="resolveMediaUrl(asset.url)" muted preload="metadata" controls />
                 <div v-else class="resource-type">{{ asset.fileName.split('.').pop()?.toUpperCase() }}</div>
                 <div><strong>{{ asset.fileName }}</strong><small>{{ (asset.fileSize / 1024 / 1024).toFixed(2) }} MB</small></div>
@@ -570,7 +616,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
             </div>
           <div v-if="contentForm.mediaAssets.length" class="content-media-list">
             <div v-for="(asset, index) in contentForm.mediaAssets" :key="asset.objectName" class="content-media-item">
-              <img v-if="asset.fileType.startsWith('image/')" :src="asset.url" :alt="asset.fileName" />
+              <img v-if="asset.fileType.startsWith('image/')" :src="asset.url" :alt="asset.fileName" @click="openMediaPreview(asset.url, asset.fileName, 'image')" />
               <video v-else-if="asset.fileType.startsWith('video/')" :src="asset.url" muted preload="metadata" />
               <div v-else class="resource-type">{{ asset.fileName.split('.').pop()?.toUpperCase() }}</div>
               <div><strong>{{ asset.fileName }}</strong><small>{{ (asset.fileSize / 1024 / 1024).toFixed(2) }} MB</small></div>
@@ -584,6 +630,31 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncModuleFromHas
         <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无文章、视频或其他编辑内容</div></div>
         <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">数据库共 {{ exerciseCatalogTotal }} 个动作 · 当前显示 {{ exerciseCatalogItems.length }} 个</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源预览</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td><div class="catalog-resource-strip"><a v-for="resource in item.resources" :key="resource.id" :href="resolveMediaUrl(resource.resourceUrl)" target="_blank" rel="noreferrer" :title="resource.viewLabel || resource.resourceType"><img v-if="isImageUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" :alt="resource.viewLabel || resource.resourceType" loading="lazy" /><video v-else-if="isVideoUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" muted preload="none" /><span v-else>{{ resource.resourceType }}</span></a><span v-if="!item.resources.length" class="media-empty">暂无资源</span></div></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
       </section>
+       <section v-if="activeModule === 'content' && canManageCatalog" class="panel module-panel exercise-editor-picker">
+         <div class="panel-heading"><div><p class="eyebrow">EXERCISE EDITOR</p><h2>动作目录编辑</h2></div><span class="panel-note">选择动作后修改数据库内容</span></div>
+         <div class="exercise-picker-list"><button v-for="item in exerciseCatalogItems" :key="item.id" type="button" class="exercise-picker-item" @click="editExercise(item)"><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></button></div>
+       </section>
+       <section v-if="activeModule === 'content' && canManageCatalog && exerciseFormOpen" class="panel module-panel">
+        <div class="panel-heading"><div><p class="eyebrow">EDIT EXERCISE</p><h2>编辑动作：{{ exerciseEditingId }}</h2></div></div>
+        <form class="exercise-form" aria-label="动作编辑表单" @submit.prevent="saveExercise">
+          <input v-model="exerciseForm.nameZh" required maxlength="120" placeholder="动作中文名称" aria-label="动作中文名称" />
+          <input v-model="exerciseForm.nameEn" maxlength="160" placeholder="动作英文名称" aria-label="动作英文名称" />
+          <input v-model="exerciseTargetsText" required placeholder="目标肌群代码，逗号分隔" aria-label="目标肌群代码" />
+          <input v-model="exerciseForm.equipment" maxlength="80" placeholder="器械" aria-label="器械" />
+          <input v-model="exerciseForm.location" required maxlength="40" placeholder="场地" aria-label="场地" />
+          <input v-model="exerciseForm.difficultyLevel" required maxlength="24" placeholder="难度代码" aria-label="难度代码" />
+          <input v-model="exerciseForm.recommendedSets" maxlength="40" placeholder="组数" aria-label="推荐组数" />
+          <input v-model="exerciseForm.recommendedReps" maxlength="40" placeholder="次数" aria-label="推荐次数" />
+          <input v-model.number="exerciseForm.restSecondsMin" min="0" type="number" placeholder="最短休息秒数" aria-label="最短休息秒数" />
+          <input v-model.number="exerciseForm.restSecondsMax" min="0" type="number" placeholder="最长休息秒数" aria-label="最长休息秒数" />
+          <textarea v-model="exerciseForm.sourceNote" maxlength="500" placeholder="动作说明" aria-label="动作说明" />
+          <div class="form-actions"><button class="button primary" type="submit" :disabled="exerciseLoading">{{ exerciseLoading ? '保存中…' : '保存动作' }}</button><button class="button" type="button" :disabled="exerciseLoading" @click="resetExerciseForm">取消</button></div>
+        </form>
+      </section>
+      <div v-if="previewMedia" class="media-lightbox" role="dialog" aria-modal="true" :aria-label="previewMedia.label" @click.self="closeMediaPreview">
+        <button class="media-lightbox-close" type="button" aria-label="关闭预览" @click="closeMediaPreview">×</button>
+        <figure><img v-if="previewMedia.kind === 'image'" :src="previewMedia.url" :alt="previewMedia.label" /><video v-else :src="previewMedia.url" controls autoplay /><figcaption>{{ previewMedia.label }}</figcaption></figure>
+      </div>
     </main>
   </div>
 </template>
