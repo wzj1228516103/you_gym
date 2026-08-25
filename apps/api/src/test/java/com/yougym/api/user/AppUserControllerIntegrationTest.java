@@ -44,11 +44,14 @@ class AppUserControllerIntegrationTest {
                         .content("{\"mealName\":\"早餐\",\"calories\":400,\"proteinG\":25,\"carbohydratesG\":40,\"fatG\":10,\"foodCount\":2}"))
                 .andExpect(status().isCreated());
         mockMvc.perform(get("/api/admin/v1/app-users").header("X-Admin-Test-Token", "local-admin"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)));
-        mockMvc.perform(get("/api/admin/v1/app-users/workouts").header("X-Admin-Test-Token", "local-admin"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)));
-        mockMvc.perform(get("/api/admin/v1/app-users/nutrition").header("X-Admin-Test-Token", "local-admin"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(50)));
+        mockMvc.perform(get("/api/admin/v1/app-users/workouts").header("X-Admin-Test-Token", "local-admin").param("pageSize", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(1)));
+        mockMvc.perform(get("/api/admin/v1/app-users/nutrition").header("X-Admin-Test-Token", "local-admin").param("pageSize", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(1)));
         mockMvc.perform(post("/api/v1/auth/logout").header("Authorization", authorization))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.loggedOut", is(true)));
         mockMvc.perform(get("/api/v1/me").header("Authorization", authorization))

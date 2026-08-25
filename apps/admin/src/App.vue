@@ -50,8 +50,15 @@ const exerciseTargetsText = ref('');
 const nutrition = ref<NutritionDashboard | null>(null);
 const analyticsUsers = ref<AnalyticsUser[]>([]);
 const appUsers = ref<AppUser[]>([]);
+const appUsersTotal = ref(0);
+const appUsersPage = ref(1);
 const appWorkouts = ref<WorkoutRecord[]>([]);
+const appWorkoutsTotal = ref(0);
+const appWorkoutsPage = ref(1);
 const appNutrition = ref<NutritionRecord[]>([]);
+const appNutritionTotal = ref(0);
+const appNutritionPage = ref(1);
+const appPageSize = 50;
 const foodCatalogItems = ref<FoodCatalogItem[]>([]);
 const foodCatalogTotal = ref(0);
 const foodCatalogPage = ref(1);
@@ -139,6 +146,9 @@ const canManageCatalog = computed(() => permissions.value.includes('CATALOG_MANA
 const anatomyRegions = computed(() => anatomyNodes.value.filter((node) => node.level === 1));
 const exerciseCatalogPageCount = computed(() => Math.max(1, Math.ceil(exerciseCatalogTotal.value / exerciseCatalogPageSize)));
 const foodCatalogPageCount = computed(() => Math.max(1, Math.ceil(foodCatalogTotal.value / foodCatalogPageSize)));
+const appUsersPageCount = computed(() => Math.max(1, Math.ceil(appUsersTotal.value / appPageSize)));
+const appWorkoutsPageCount = computed(() => Math.max(1, Math.ceil(appWorkoutsTotal.value / appPageSize)));
+const appNutritionPageCount = computed(() => Math.max(1, Math.ceil(appNutritionTotal.value / appPageSize)));
 const roleLabel = computed(() => ({ SUPER_ADMIN: '超级管理员', ADMIN: '管理员', EMPLOYEE: '普通员工' }[role.value ?? 'EMPLOYEE']));
 const isSession = computed(() => token.value.startsWith('yg_admin_'));
 
@@ -489,15 +499,21 @@ async function refreshModule(module: AdminModule, permissionsForSession: string[
       if (!permissionsForSession.includes('ANALYTICS_READ')) return;
       const [nextUsers, nextAppUsers, nextAppWorkouts, nextAppNutrition] = await Promise.all([
         fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined),
-        fetchAppUsers(token.value),
-        fetchAppWorkouts(token.value),
-        fetchAppNutrition(token.value),
+        fetchAppUsers(token.value, undefined, appUsersPage.value, appPageSize),
+        fetchAppWorkouts(token.value, undefined, appWorkoutsPage.value, appPageSize),
+        fetchAppNutrition(token.value, undefined, appNutritionPage.value, appPageSize),
       ]);
       if (generation !== refreshGeneration) return;
       analyticsUsers.value = nextUsers.items;
       appUsers.value = nextAppUsers.items;
+      appUsersTotal.value = nextAppUsers.total;
+      appUsersPage.value = nextAppUsers.page;
       appWorkouts.value = nextAppWorkouts.items;
+      appWorkoutsTotal.value = nextAppWorkouts.total;
+      appWorkoutsPage.value = nextAppWorkouts.page;
       appNutrition.value = nextAppNutrition.items;
+      appNutritionTotal.value = nextAppNutrition.total;
+      appNutritionPage.value = nextAppNutrition.page;
       return;
     }
     case 'nutrition': {
@@ -582,6 +598,51 @@ async function refresh() {
   } finally { if (generation === refreshGeneration) loading.value = false; }
 }
 
+type AppDataPage = 'users' | 'workouts' | 'nutrition';
+async function refreshAppDataPage(kind: AppDataPage, page: number) {
+  if (!canReadAnalytics.value || loading.value) return;
+  const generation = ++refreshGeneration;
+  loading.value = true;
+  error.value = '';
+  try {
+    if (kind === 'users') {
+      const result = await fetchAppUsers(token.value, undefined, page, appPageSize);
+      if (generation !== refreshGeneration) return;
+      appUsers.value = result.items;
+      appUsersTotal.value = result.total;
+      appUsersPage.value = result.page;
+    } else if (kind === 'workouts') {
+      const result = await fetchAppWorkouts(token.value, undefined, page, appPageSize);
+      if (generation !== refreshGeneration) return;
+      appWorkouts.value = result.items;
+      appWorkoutsTotal.value = result.total;
+      appWorkoutsPage.value = result.page;
+    } else {
+      const result = await fetchAppNutrition(token.value, undefined, page, appPageSize);
+      if (generation !== refreshGeneration) return;
+      appNutrition.value = result.items;
+      appNutritionTotal.value = result.total;
+      appNutritionPage.value = result.page;
+    }
+    lastUpdated.value = new Date().toLocaleString();
+  } catch (cause) {
+    if (generation !== refreshGeneration) return;
+    error.value = cause instanceof Error ? cause.message : '加载用户数据失败';
+  } finally { if (generation === refreshGeneration) loading.value = false; }
+}
+function changeAppUsersPage(delta: number) {
+  const nextPage = Math.min(appUsersPageCount.value, Math.max(1, appUsersPage.value + delta));
+  if (nextPage !== appUsersPage.value) void refreshAppDataPage('users', nextPage);
+}
+function changeAppWorkoutsPage(delta: number) {
+  const nextPage = Math.min(appWorkoutsPageCount.value, Math.max(1, appWorkoutsPage.value + delta));
+  if (nextPage !== appWorkoutsPage.value) void refreshAppDataPage('workouts', nextPage);
+}
+function changeAppNutritionPage(delta: number) {
+  const nextPage = Math.min(appNutritionPageCount.value, Math.max(1, appNutritionPage.value + delta));
+  if (nextPage !== appNutritionPage.value) void refreshAppDataPage('nutrition', nextPage);
+}
+
 async function createAccount() {
   accountLoading.value = true; error.value = '';
   try { await createAdminAccount(token.value, accountForm.value); accountForm.value = { username: '', displayName: '', password: '', role: 'EMPLOYEE' }; adminAccounts.value = (await fetchAdminAccounts(token.value)).items; }
@@ -592,7 +653,7 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; loadedModules.value = new Set(); dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
+async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; loadedModules.value = new Set(); dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appUsersTotal.value = 0; appUsersPage.value = 1; appWorkouts.value = []; appWorkoutsTotal.value = 0; appWorkoutsPage.value = 1; appNutrition.value = []; appNutritionTotal.value = 0; appNutritionPage.value = 1; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
@@ -664,9 +725,9 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
         <div class="table-wrap"><table><thead><tr><th>用户 ID</th><th>用户类型</th><th>事件数</th><th>首次访问</th><th>最近访问</th><th>平台</th></tr></thead><tbody><tr v-for="user in analyticsUsers" :key="user.analyticsUserId"><td><strong>{{ user.analyticsUserId }}</strong></td><td><span :class="['status', user.analyticsUserId.startsWith('anonymous_') ? 'draft' : 'active']">{{ user.analyticsUserId.startsWith('anonymous_') ? '游客' : '已识别' }}</span></td><td>{{ user.eventCount }}</td><td>{{ new Date(user.firstSeen).toLocaleString() }}</td><td>{{ new Date(user.lastSeen).toLocaleString() }}</td><td>{{ user.platform ?? '-' }}</td></tr></tbody></table><div v-if="!analyticsUsers.length" class="empty">暂无用户行为数据</div></div>
       </section>
       <section v-if="activeModule === 'users' && canReadAnalytics" class="panel audit-panel users-center module-panel">
-        <div class="panel-heading"><div><p class="eyebrow">APP USER ACCOUNTS</p><h2>App 用户数据</h2></div><span class="panel-note">{{ appUsers.length }} 个注册账户</span></div>
-        <div class="table-wrap"><table><thead><tr><th>手机号</th><th>昵称</th><th>目标</th><th>经验</th><th>状态</th><th>注册时间</th><th>最近登录</th></tr></thead><tbody><tr v-for="user in appUsers" :key="user.id"><td><strong>{{ user.phone }}</strong></td><td>{{ user.nickname }}</td><td>{{ user.goal || '-' }}</td><td>{{ user.experienceLevel || '-' }}</td><td><span class="status active">{{ user.status }}</span></td><td>{{ new Date(user.createdAt).toLocaleString() }}</td><td>{{ user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : '-' }}</td></tr></tbody></table><div v-if="!appUsers.length" class="empty">暂无 App 注册用户</div></div>
-        <div class="content-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKOUT RECORDS</p><h2>训练记录</h2></div><span class="panel-note">{{ appWorkouts.length }} 条</span></div><div class="table-wrap"><table><thead><tr><th>用户</th><th>训练</th><th>时长</th><th>组数</th><th>容量</th><th>完成时间</th></tr></thead><tbody><tr v-for="item in appWorkouts" :key="item.id"><td>{{ item.userId.slice(0, 8) }}</td><td>{{ item.title }}</td><td>{{ Math.round(item.durationSeconds / 60) }} 分钟</td><td>{{ item.totalSets }}</td><td>{{ item.totalVolume }}</td><td>{{ new Date(item.completedAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!appWorkouts.length" class="empty">暂无训练记录</div></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION RECORDS</p><h2>饮食记录</h2></div><span class="panel-note">{{ appNutrition.length }} 条</span></div><div class="table-wrap"><table><thead><tr><th>用户</th><th>餐次</th><th>热量</th><th>蛋白质</th><th>食物数</th><th>记录时间</th></tr></thead><tbody><tr v-for="item in appNutrition" :key="item.id"><td>{{ item.userId.slice(0, 8) }}</td><td>{{ item.mealName }}</td><td>{{ item.calories }} kcal</td><td>{{ item.proteinG }} g</td><td>{{ item.foodCount }}</td><td>{{ new Date(item.recordedAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!appNutrition.length" class="empty">暂无饮食记录</div></div></article></div>
+        <div class="panel-heading"><div><p class="eyebrow">APP USER ACCOUNTS</p><h2>App 用户数据</h2></div><span class="panel-note">{{ appUsersTotal }} 个注册账户</span></div>
+        <div class="table-wrap"><table><thead><tr><th>手机号</th><th>昵称</th><th>目标</th><th>经验</th><th>状态</th><th>注册时间</th><th>最近登录</th></tr></thead><tbody><tr v-for="user in appUsers" :key="user.id"><td><strong>{{ user.phone }}</strong></td><td>{{ user.nickname }}</td><td>{{ user.goal || '-' }}</td><td>{{ user.experienceLevel || '-' }}</td><td><span class="status active">{{ user.status }}</span></td><td>{{ new Date(user.createdAt).toLocaleString() }}</td><td>{{ user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : '-' }}</td></tr></tbody></table><div v-if="!appUsers.length" class="empty">暂无 App 注册用户</div></div><div v-if="appUsersTotal" class="catalog-pagination"><span>第 {{ appUsersPage }} / {{ appUsersPageCount }} 页</span><span class="catalog-pagination-total">共 {{ appUsersTotal }} 个账户</span><button class="button" type="button" :disabled="loading || appUsersPage <= 1" @click="changeAppUsersPage(-1)">上一页</button><button class="button" type="button" :disabled="loading || appUsersPage >= appUsersPageCount" @click="changeAppUsersPage(1)">下一页</button></div>
+        <div class="content-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">WORKOUT RECORDS</p><h2>训练记录</h2></div><span class="panel-note">{{ appWorkoutsTotal }} 条</span></div><div class="table-wrap"><table><thead><tr><th>用户</th><th>训练</th><th>时长</th><th>组数</th><th>容量</th><th>完成时间</th></tr></thead><tbody><tr v-for="item in appWorkouts" :key="item.id"><td>{{ item.userId.slice(0, 8) }}</td><td>{{ item.title }}</td><td>{{ Math.round(item.durationSeconds / 60) }} 分钟</td><td>{{ item.totalSets }}</td><td>{{ item.totalVolume }}</td><td>{{ new Date(item.completedAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!appWorkouts.length" class="empty">暂无训练记录</div></div><div v-if="appWorkoutsTotal" class="catalog-pagination"><span>第 {{ appWorkoutsPage }} / {{ appWorkoutsPageCount }} 页</span><span class="catalog-pagination-total">共 {{ appWorkoutsTotal }} 条训练</span><button class="button" type="button" :disabled="loading || appWorkoutsPage <= 1" @click="changeAppWorkoutsPage(-1)">上一页</button><button class="button" type="button" :disabled="loading || appWorkoutsPage >= appWorkoutsPageCount" @click="changeAppWorkoutsPage(1)">下一页</button></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION RECORDS</p><h2>饮食记录</h2></div><span class="panel-note">{{ appNutritionTotal }} 条</span></div><div class="table-wrap"><table><thead><tr><th>用户</th><th>餐次</th><th>热量</th><th>蛋白质</th><th>食物数</th><th>记录时间</th></tr></thead><tbody><tr v-for="item in appNutrition" :key="item.id"><td>{{ item.userId.slice(0, 8) }}</td><td>{{ item.mealName }}</td><td>{{ item.calories }} kcal</td><td>{{ item.proteinG }} g</td><td>{{ item.foodCount }}</td><td>{{ new Date(item.recordedAt).toLocaleString() }}</td></tr></tbody></table><div v-if="!appNutrition.length" class="empty">暂无饮食记录</div></div><div v-if="appNutritionTotal" class="catalog-pagination"><span>第 {{ appNutritionPage }} / {{ appNutritionPageCount }} 页</span><span class="catalog-pagination-total">共 {{ appNutritionTotal }} 条饮食</span><button class="button" type="button" :disabled="loading || appNutritionPage <= 1" @click="changeAppNutritionPage(-1)">上一页</button><button class="button" type="button" :disabled="loading || appNutritionPage >= appNutritionPageCount" @click="changeAppNutritionPage(1)">下一页</button></div></article></div>
       </section>
       <section v-if="activeModule === 'nutrition' && canReadAnalytics" class="panel audit-panel nutrition-center module-panel">
         <div class="panel-heading"><div><p class="eyebrow">NUTRITION OPERATIONS</p><h2>饮食管理</h2></div><div class="content-actions"><span class="panel-note">行为数据 · {{ nutrition?.kpis.eventCount ?? 0 }} 条</span><button v-if="canExport" class="button" type="button" @click="downloadNutritionEventsCsv">导出饮食 CSV</button></div></div>
