@@ -1,0 +1,77 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: you-gym-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:yougym;MODE=MySQL;DB_CLOSE_DELAY=-1}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+  servlet:
+    multipart:
+      max-file-size: 51MB
+      max-request-size: 510MB
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+yougym:
+  runtime:
+    environment: ${YOUGYM_ENVIRONMENT:local}
+  web:
+    allowed-origins: ${YOUGYM_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  admin:
+    test-token: ${YOUGYM_ADMIN_TEST_TOKEN:local-admin}
+    test-role: ${YOUGYM_ADMIN_TEST_ROLE:SUPER_ADMIN}
+    employee-token: ${YOUGYM_ADMIN_EMPLOYEE_TOKEN:local-employee}
+    test-access-enabled: ${YOUGYM_ADMIN_TEST_ACCESS_ENABLED:true}
+    bootstrap-enabled: ${YOUGYM_ADMIN_BOOTSTRAP_ENABLED:false}
+    bootstrap-username: ${YOUGYM_ADMIN_BOOTSTRAP_USERNAME:}
+    bootstrap-password: ${YOUGYM_ADMIN_BOOTSTRAP_PASSWORD:}
+    bootstrap-display-name: ${YOUGYM_ADMIN_BOOTSTRAP_DISPLAY_NAME:Local Super Admin}
+    session-hours: ${YOUGYM_ADMIN_SESSION_HOURS:8}
+    registration-enabled: ${YOUGYM_ADMIN_REGISTRATION_ENABLED:false}
+    registration-invite-code: ${YOUGYM_ADMIN_REGISTRATION_INVITE_CODE:}
+  integrations:
+    mode: ${YOUGYM_INTEGRATION_MODE:mock}
+    test-token: ${YOUGYM_INTEGRATION_TEST_TOKEN:local-only}
+    test-endpoints-enabled: ${YOUGYM_INTEGRATION_TEST_ENDPOINTS_ENABLED:true}
+    sms:
+      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID:}
+      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET:}
+      region: ${ALIYUN_SMS_REGION:cn-hangzhou}
+      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}
+      sign-name: ${ALIYUN_SMS_SIGN_NAME:}
+      template-code: ${ALIYUN_SMS_TEMPLATE_CODE:}
+    email:
+      access-key-id: ${ALIYUN_EMAIL_ACCESS_KEY_ID:}
+      access-key-secret: ${ALIYUN_EMAIL_ACCESS_KEY_SECRET:}
+      endpoint: ${ALIYUN_EMAIL_ENDPOINT:dm.aliyuncs.com}
+      account-name: ${ALIYUN_EMAIL_ACCOUNT_NAME:}
+      tag-name: ${ALIYUN_EMAIL_TAG_NAME:}
+      register-template-id: ${ALIYUN_EMAIL_REGISTER_TEMPLATE_ID:}
+      login-template-id: ${ALIYUN_EMAIL_LOGIN_TEMPLATE_ID:}
+    oss:
+      endpoint: ${ALIYUN_OSS_ENDPOINT:}
+      region: ${ALIYUN_OSS_REGION:cn-hangzhou}
+      access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:}
+      access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:}
+      bucket: ${ALIYUN_OSS_BUCKET:}
+      public-base-url: ${ALIYUN_OSS_PUBLIC_BASE_URL:}
+      key-prefix: ${ALIYUN_OSS_KEY_PREFIX:you-gym/integration-tests}
+      signed-url-minutes: ${ALIYUN_OSS_SIGNED_URL_MINUTES:15}
