@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import {
   Activity, Apple, BarChart3, BookOpen, ChevronRight, ClipboardCheck,
   Dumbbell, FileClock, LayoutDashboard, RefreshCw, Settings, Upload,
   UserRound, UsersRound,
 } from '@lucide/vue';
 import AdminAuthView from './AdminAuthView.vue';
-import DashboardChart from './components/DashboardChart.vue';
+const DashboardChart = defineAsyncComponent(() => import('./components/DashboardChart.vue'));
 import {
   createAdminAccount, createContent, downloadAnalyticsCsv, downloadAnalyticsUsersCsv, downloadNutritionCsv, fetchAdminAccounts, fetchAdminAnatomyNodes, fetchAdminSessions,
   fetchAdminSession, fetchAnalyticsDashboard, fetchAnalyticsEvents, fetchAnalyticsSummary, fetchAuditLogs, fetchAnalyticsUsers, fetchContent, fetchNutritionDashboard,
