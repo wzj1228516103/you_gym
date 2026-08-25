@@ -48,12 +48,14 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         const normalized = catalogResult.value.items.map(toExercise);
         if (normalized.length) {
           setCatalogExercises(normalized);
-          setExerciseCatalogSynced(true);
-          setAnatomyNodes((current) => current.map((node) => ({
-            ...node,
-            exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
-          })));
+        } else {
+          setCatalogExercises([]);
         }
+        setExerciseCatalogSynced(true);
+        setAnatomyNodes((current) => current.map((node) => ({
+          ...node,
+          exerciseIds: normalized.filter((exercise) => matchesAnatomyNode(exercise, node)).map((exercise) => exercise.id),
+        })));
       }
     });
     return () => { active = false; };
@@ -144,7 +146,7 @@ function toExercise(item: import('../services/api').ExerciseCatalogItem): Exerci
     location: item.location,
     level,
     rating: 0,
-    sets: item.recommendedSets ?? 3,
+    sets: normalizeSetCount(item.recommendedSets),
     reps: item.recommendedReps ?? '8-12',
     restSeconds: item.restSecondsMin ?? 60,
     steps: item.stepLabels,
@@ -159,6 +161,12 @@ function toExercise(item: import('../services/api').ExerciseCatalogItem): Exerci
     })),
     sourceNote: item.sourceNote ?? undefined,
   };
+}
+
+function normalizeSetCount(value: string | number | null | undefined) {
+  const numericValue = typeof value === 'number' ? value : Number(String(value ?? '').match(/\d+(?:\.\d+)?/)?.[0]);
+  if (!Number.isFinite(numericValue)) return 3;
+  return Math.max(1, Math.min(20, Math.round(numericValue)));
 }
 
 const muscleLabels: Record<string, string> = {

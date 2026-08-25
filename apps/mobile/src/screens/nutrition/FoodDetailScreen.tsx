@@ -2,9 +2,9 @@ import { useCallback, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Minus, Plus, Utensils } from 'lucide-react-native';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, PrimaryButton, ScreenHeader, SegmentedControl } from '../../components/ui';
-import { fetchFood, FoodItem, saveNutrition } from '../../services/api';
+import { fetchFood, FoodItem, isImageMedia, resolveMediaUrl, saveNutrition } from '../../services/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
 import { useAuthState } from '../../state/AuthState';
@@ -19,13 +19,17 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   const [meal, setMeal] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
   const [grams, setGrams] = useState(150);
   const [saving, setSaving] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   useFocusEffect(useCallback(() => {
     let active = true;
+    setImageFailed(false);
     void fetchFood(route.params.foodId).then((result) => { if (active) { setFood(result); setError(null); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '食物加载失败'); });
     return () => { active = false; };
   }, [route.params.foodId]));
   if (!food) return <AppScreen><ScreenHeader title="食物详情" onBack={navigation.goBack} /><Text style={styles.noteText}>{error ?? '食物加载中…'}</Text></AppScreen>;
   const loadedFood = food;
+  const foodAsset = loadedFood.mediaAssets?.find((asset) => isImageMedia(asset.fileType, asset.url));
+  const foodImageUrl = resolveMediaUrl(foodAsset?.url ?? (isImageMedia(undefined, loadedFood.mediaUrl) ? loadedFood.mediaUrl : undefined));
   const ratio = grams / 100;
   async function addMeal() {
     if (!token) { Alert.alert('需要登录', '游客模式不会同步饮食记录，请登录后再保存。'); return; }
@@ -39,7 +43,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   return (
     <AppScreen>
       <ScreenHeader title={loadedFood.name} onBack={navigation.goBack} />
-      <View style={styles.hero}><Utensils size={58} color={colors.primary} /><Text style={styles.source}>来源：{loadedFood.source}</Text></View>
+      <View style={styles.hero}>{foodImageUrl && !imageFailed ? <Image source={{ uri: foodImageUrl }} resizeMode="cover" style={styles.heroImage} onError={() => setImageFailed(true)} /> : <Utensils size={58} color={colors.primary} />}<Text style={styles.source}>来源：{loadedFood.source}</Text></View>
       <View style={styles.calorieRow}><Text style={styles.calories}>{Math.round(loadedFood.calories * ratio)} kcal</Text><Text style={styles.serving}>{grams} g</Text></View>
       <View style={styles.macroRow}><Nutrient label="蛋白质" value={`${(loadedFood.protein * ratio).toFixed(1)} g`} /><Nutrient label="碳水" value={`${(loadedFood.carbs * ratio).toFixed(1)} g`} /><Nutrient label="脂肪" value={`${(loadedFood.fat * ratio).toFixed(1)} g`} /></View>
       <Text style={styles.label}>记录到餐次</Text>
@@ -55,7 +59,8 @@ export function FoodDetailScreen({ navigation, route }: Props) {
 function Nutrient({ label, value }: { label: string; value: string }) { return <View style={styles.nutrient}><Text style={styles.nutrientLabel}>{label}</Text><Text style={styles.nutrientValue}>{value}</Text></View>; }
 
 const styles = StyleSheet.create({
-  hero: { height: 210, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: '#161A0B', alignItems: 'center', justifyContent: 'center' },
+  hero: { height: 210, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: '#161A0B', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  heroImage: { width: '100%', height: '100%' },
   source: { ...typography.caption, color: colors.textSecondary, position: 'absolute', bottom: spacing.x3 },
   calorieRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: spacing.x4 },
   calories: { ...typography.pageTitle, color: colors.text },

@@ -180,6 +180,8 @@ td small { color: #6e7580; font-size: 10px; }
 .exercise-picker-item small { color: #737b87; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .catalog-resource-strip img, .catalog-resource-strip video { width: 100%; height: 100%; object-fit: cover; }
 .media-empty { color: #68707b; font-size: 11px; }
+.catalog-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; color: #a5acb8; font-size: 12px; }
+.catalog-pagination-total { margin-right: auto; color: #68707b; }
 .properties-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 .users-center { overflow: hidden; }
 .user-data-note { margin: -8px 0 16px; line-height: 1.6; }

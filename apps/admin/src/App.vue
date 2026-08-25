@@ -38,6 +38,9 @@ const anatomyNodes = ref<AnatomyNode[]>([]);
 const contentItems = ref<ContentItem[]>([]);
 const exerciseCatalogItems = ref<ExerciseCatalogItem[]>([]);
 const exerciseCatalogTotal = ref(0);
+const exerciseCatalogPage = ref(1);
+const exerciseCatalogPageSize = 24;
+const exerciseCatalogLoading = ref(false);
 const exerciseEditingId = ref<string | null>(null);
 const exerciseFormOpen = ref(false);
 const exerciseLoading = ref(false);
@@ -49,6 +52,10 @@ const appUsers = ref<AppUser[]>([]);
 const appWorkouts = ref<WorkoutRecord[]>([]);
 const appNutrition = ref<NutritionRecord[]>([]);
 const foodCatalogItems = ref<FoodCatalogItem[]>([]);
+const foodCatalogTotal = ref(0);
+const foodCatalogPage = ref(1);
+const foodCatalogPageSize = 24;
+const foodCatalogLoading = ref(false);
 const foodSearch = ref('');
 const foodStatusFilter = ref<FoodCatalogItem['status'] | ''>('');
 const foodFormOpen = ref(false);
@@ -118,6 +125,8 @@ const canManageContent = computed(() => permissions.value.includes('CONTENT_MANA
 const canReadAnalytics = computed(() => permissions.value.includes('ANALYTICS_READ'));
 const canManageCatalog = computed(() => permissions.value.includes('CATALOG_MANAGE'));
 const anatomyRegions = computed(() => anatomyNodes.value.filter((node) => node.level === 1));
+const exerciseCatalogPageCount = computed(() => Math.max(1, Math.ceil(exerciseCatalogTotal.value / exerciseCatalogPageSize)));
+const foodCatalogPageCount = computed(() => Math.max(1, Math.ceil(foodCatalogTotal.value / foodCatalogPageSize)));
 const roleLabel = computed(() => ({ SUPER_ADMIN: '超级管理员', ADMIN: '管理员', EMPLOYEE: '普通员工' }[role.value ?? 'EMPLOYEE']));
 const isSession = computed(() => token.value.startsWith('yg_admin_'));
 
@@ -138,22 +147,36 @@ function isVideoUrl(url: string | null | undefined) { return /\.(mp4|mov|avi|web
 function isImageUrl(url: string | null | undefined) { return /\.(jpg|jpeg|png|gif|bmp|webp)(?:\?|$)/i.test(url ?? ''); }
 function resetContentForm() { contentEditingId.value = null; contentFormOpen.value = false; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: '', contentType: 'ARTICLE', summary: '', body: '', mediaUrl: '', mediaAssets: [], anatomyNodeId: '' }; }
 function editContent(item: ContentItem) { contentEditingId.value = item.id; contentFormOpen.value = true; contentUploadMessage.value = ''; contentUploadFailures.value = []; contentUploadProgress.value = 0; contentRemovedAssets.value = []; contentUploadedInForm.value = []; contentForm.value = { title: item.title, contentType: item.contentType, summary: item.summary ?? '', body: item.body ?? '', mediaUrl: item.mediaUrl ?? '', mediaAssets: [...(item.mediaAssets ?? [])], anatomyNodeId: item.anatomyNodeId ?? '' }; }
-async function refreshContent() {
+async function refreshContent(resetExercisePage = false) {
   if (!canReadContent.value) return;
+  if (resetExercisePage) exerciseCatalogPage.value = 1;
   const search = contentSearch.value.trim() || undefined;
   const [content, exercises] = await Promise.all([
     fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search }),
-    fetchAdminExerciseCatalog(token.value, search),
+    fetchAdminExerciseCatalog(token.value, search, exerciseCatalogPage.value, exerciseCatalogPageSize),
   ]);
   contentItems.value = content.items;
   exerciseCatalogItems.value = exercises.items;
   exerciseCatalogTotal.value = exercises.total;
+  exerciseCatalogPage.value = exercises.page;
 }
 async function refreshExerciseCatalog() {
   if (!canReadContent.value) return;
-  const result = await fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined);
-  exerciseCatalogItems.value = result.items;
-  exerciseCatalogTotal.value = result.total;
+  exerciseCatalogLoading.value = true;
+  try {
+    const result = await fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined, exerciseCatalogPage.value, exerciseCatalogPageSize);
+    exerciseCatalogItems.value = result.items;
+    exerciseCatalogTotal.value = result.total;
+    exerciseCatalogPage.value = result.page;
+  } finally {
+    exerciseCatalogLoading.value = false;
+  }
+}
+async function changeExercisePage(delta: number) {
+  const nextPage = Math.min(exerciseCatalogPageCount.value, Math.max(1, exerciseCatalogPage.value + delta));
+  if (nextPage === exerciseCatalogPage.value || exerciseCatalogLoading.value) return;
+  exerciseCatalogPage.value = nextPage;
+  await refreshExerciseCatalog();
 }
 function resetExerciseForm() {
   exerciseEditingId.value = null;
@@ -194,7 +217,25 @@ function handleMediaPreviewClick(event: MouseEvent) {
   event.preventDefault();
   openMediaPreview(anchor.href, anchor.title || '媒体预览', Boolean(anchor.querySelector('video')) ? 'video' : undefined);
 }
-async function refreshFoodCatalog() { if (!canReadAnalytics.value) return; foodCatalogItems.value = (await fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined)).items; }
+async function refreshFoodCatalog(resetPage = false) {
+  if (!canReadAnalytics.value) return;
+  if (resetPage) foodCatalogPage.value = 1;
+  foodCatalogLoading.value = true;
+  try {
+    const result = await fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined, foodCatalogPage.value, foodCatalogPageSize);
+    foodCatalogItems.value = result.items;
+    foodCatalogTotal.value = result.total;
+    foodCatalogPage.value = result.page;
+  } finally {
+    foodCatalogLoading.value = false;
+  }
+}
+async function changeFoodPage(delta: number) {
+  const nextPage = Math.min(foodCatalogPageCount.value, Math.max(1, foodCatalogPage.value + delta));
+  if (nextPage === foodCatalogPage.value || foodCatalogLoading.value) return;
+  foodCatalogPage.value = nextPage;
+  await refreshFoodCatalog();
+}
 
 function resetFoodForm() {
   foodEditingId.value = null;
@@ -430,13 +471,13 @@ async function refresh() {
       session.permissions.includes('ADMIN_ACCOUNT_MANAGE') ? fetchAdminSessions(token.value) : Promise.resolve({ items: [] as AdminSessionView[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAdminAnatomyNodes(token.value) : Promise.resolve({ version: 1, items: [] as AnatomyNode[] }),
       session.permissions.includes('CONTENT_READ') ? fetchContent(token.value, { status: contentStatusFilter.value || undefined, contentType: contentTypeFilter.value || undefined, search: contentSearch.value.trim() || undefined }) : Promise.resolve({ items: [] as ContentItem[] }),
-      session.permissions.includes('CONTENT_READ') ? fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined) : Promise.resolve({ source: 'exercise_catalog', total: 0, items: [] as ExerciseCatalogItem[] }),
+      session.permissions.includes('CONTENT_READ') ? fetchAdminExerciseCatalog(token.value, contentSearch.value.trim() || undefined, exerciseCatalogPage.value, exerciseCatalogPageSize) : Promise.resolve({ source: 'exercise_catalog', total: 0, page: 1, pageSize: exerciseCatalogPageSize, items: [] as ExerciseCatalogItem[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchNutritionDashboard(token.value, from, to) : Promise.resolve(null),
       session.permissions.includes('ANALYTICS_READ') ? fetchAnalyticsUsers(token.value, from, to, userSearch.value.trim() || undefined) : Promise.resolve({ items: [] as AnalyticsUser[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppUsers(token.value) : Promise.resolve({ items: [] as AppUser[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppWorkouts(token.value) : Promise.resolve({ items: [] as WorkoutRecord[] }),
       session.permissions.includes('ANALYTICS_READ') ? fetchAppNutrition(token.value) : Promise.resolve({ items: [] as NutritionRecord[] }),
-      session.permissions.includes('ANALYTICS_READ') ? fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined) : Promise.resolve({ items: [] as FoodCatalogItem[] }),
+      session.permissions.includes('ANALYTICS_READ') ? fetchAdminFoodCatalog(token.value, foodSearch.value.trim() || undefined, foodStatusFilter.value || undefined, foodCatalogPage.value, foodCatalogPageSize) : Promise.resolve({ items: [] as FoodCatalogItem[], total: 0, page: 1, pageSize: foodCatalogPageSize }),
     ]);
     if (generation !== refreshGeneration) return;
     dashboard.value = nextDashboard;
@@ -449,17 +490,20 @@ async function refresh() {
     contentItems.value = nextContent.items;
     exerciseCatalogItems.value = nextExercises.items;
     exerciseCatalogTotal.value = nextExercises.total;
+    exerciseCatalogPage.value = nextExercises.page;
     nutrition.value = nextNutrition;
     analyticsUsers.value = nextUsers.items;
     appUsers.value = nextAppUsers.items;
     appWorkouts.value = nextAppWorkouts.items;
     appNutrition.value = nextAppNutrition.items;
     foodCatalogItems.value = nextFoods.items;
+    foodCatalogTotal.value = nextFoods.total;
+    foodCatalogPage.value = nextFoods.page;
     lastUpdated.value = new Date().toLocaleString();
   } catch (cause) {
     if (generation !== refreshGeneration) return;
     role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = [];
-    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = [];
+    auditLogs.value = []; adminAccounts.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1;
     error.value = cause instanceof Error ? cause.message : '加载失败';
   } finally { if (generation === refreshGeneration) loading.value = false; }
 }
@@ -474,7 +518,7 @@ async function toggleAccount(account: AdminAccount) { try { await updateAdminAcc
 async function revokeSession(session: AdminSessionView) { try { await revokeAdminSession(token.value, session.id); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function revokeOtherSessions() { try { await revokeOtherAdminSessions(token.value); adminSessions.value = (await fetchAdminSessions(token.value)).items; } catch (cause) { error.value = cause instanceof Error ? cause.message : '撤销会话失败'; } }
 async function handleAuthenticated(nextToken: string) { token.value = nextToken; localStorage.setItem(sessionStorageKey, nextToken); await refresh(); }
-async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; } }
+async function logout() { const current = token.value; refreshGeneration++; try { if (isSession.value) await logoutAdmin(current); } finally { localStorage.removeItem(sessionStorageKey); token.value = ''; role.value = null; permissions.value = []; dashboard.value = null; summary.value = null; events.value = []; auditLogs.value = []; adminSessions.value = []; anatomyNodes.value = []; contentItems.value = []; exerciseCatalogItems.value = []; exerciseCatalogTotal.value = 0; exerciseCatalogPage.value = 1; nutrition.value = null; analyticsUsers.value = []; appUsers.value = []; appWorkouts.value = []; appNutrition.value = []; foodCatalogItems.value = []; foodCatalogTotal.value = 0; foodCatalogPage.value = 1; } }
 async function downloadCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '导出失败'; } }
 async function downloadNutritionEventsCsv() { try { if (!canExport.value) return; const blob = await downloadNutritionCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nutrition-events.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '饮食数据导出失败'; } }
 async function downloadUsersCsv() { try { if (!canExport.value) return; const blob = await downloadAnalyticsUsersCsv(token.value); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'analytics-users.csv'; anchor.click(); URL.revokeObjectURL(url); } catch (cause) { error.value = cause instanceof Error ? cause.message : '用户数据导出失败'; } }
@@ -559,8 +603,8 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
           <article class="stat"><span>餐次记录</span><strong>{{ nutrition?.kpis.mealRecords ?? 0 }}</strong><small>nutrition_meal_recorded</small></article>
         </div>
         <div class="panel catalog-panel">
-          <div class="panel-heading"><div><p class="eyebrow">FOOD CATALOG</p><h2>食物目录</h2></div><div class="content-actions"><span class="panel-note">{{ foodCatalogItems.length }} 种食物</span><button v-if="canManageCatalog" class="button primary" type="button" @click="startNewFood">新增食物</button></div></div>
-          <div class="content-toolbar catalog-toolbar"><input v-model="foodSearch" placeholder="搜索食物或数据来源" aria-label="搜索食物" @keyup.enter="refreshFoodCatalog" /><select v-model="foodStatusFilter" aria-label="按食物状态筛选" @change="refreshFoodCatalog"><option value="">全部状态</option><option value="ACTIVE">已上架</option><option value="INACTIVE">已下架</option></select><button class="button" type="button" @click="refreshFoodCatalog">查询</button></div>
+          <div class="panel-heading"><div><p class="eyebrow">FOOD CATALOG</p><h2>食物目录</h2></div><div class="content-actions"><span class="panel-note">数据库共 {{ foodCatalogTotal }} 种 · 当前显示 {{ foodCatalogItems.length }} 种</span><button v-if="canManageCatalog" class="button primary" type="button" @click="startNewFood">新增食物</button></div></div>
+          <div class="content-toolbar catalog-toolbar"><input v-model="foodSearch" placeholder="搜索食物或数据来源" aria-label="搜索食物" @keyup.enter="refreshFoodCatalog(true)" /><select v-model="foodStatusFilter" aria-label="按食物状态筛选" @change="refreshFoodCatalog(true)"><option value="">全部状态</option><option value="ACTIVE">已上架</option><option value="INACTIVE">已下架</option></select><button class="button" type="button" :disabled="foodCatalogLoading" @click="refreshFoodCatalog(true)">查询</button></div>
           <form v-if="foodFormOpen && canManageCatalog" class="food-form" aria-label="食物目录表单" @submit.prevent="saveFood">
             <input v-model="foodForm.name" required maxlength="120" placeholder="食物名称" aria-label="食物名称" />
             <input v-model="foodForm.id" maxlength="64" :disabled="Boolean(foodEditingId)" placeholder="食物 ID（可选）" aria-label="食物 ID" />
@@ -590,7 +634,7 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
             </div>
             <div class="form-actions"><button class="button primary" type="submit" :disabled="foodLoading">{{ foodLoading ? '保存中…' : foodEditingId ? '保存修改' : '创建食物' }}</button><button class="button" type="button" :disabled="foodLoading" @click="resetFoodForm">取消</button></div>
           </form>
-          <div class="table-wrap"><table><thead><tr><th>食物</th><th>媒体</th><th>份量</th><th>热量</th><th>蛋白质</th><th>碳水</th><th>脂肪</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in foodCatalogItems" :key="item.id"><td><strong>{{ item.name }}</strong><small>{{ item.id }}</small></td><td><div class="catalog-resource-strip"><template v-for="(asset, index) in item.mediaAssets ?? []" :key="asset.objectName || index"><a :href="resolveMediaUrl(asset.url)" target="_blank" rel="noreferrer" :title="asset.fileName"><img v-if="asset.fileType.startsWith('image/') || isImageUrl(asset.url)" :src="resolveMediaUrl(asset.url)" :alt="asset.fileName" /><video v-else-if="asset.fileType.startsWith('video/') || isVideoUrl(asset.url)" :src="resolveMediaUrl(asset.url)" muted preload="metadata" /><span v-else>{{ asset.fileName.split('.').pop()?.toUpperCase() }}</span></a></template><a v-if="!item.mediaAssets?.length && item.mediaUrl" :href="resolveMediaUrl(item.mediaUrl)" target="_blank" rel="noreferrer" title="打开媒体"><img v-if="isImageUrl(item.mediaUrl)" :src="resolveMediaUrl(item.mediaUrl)" alt="食物媒体" /><video v-else-if="isVideoUrl(item.mediaUrl)" :src="resolveMediaUrl(item.mediaUrl)" muted preload="metadata" /><span v-else>打开</span></a><span v-if="!item.mediaAssets?.length && !item.mediaUrl" class="media-empty">暂无</span></div></td><td>{{ item.serving }}</td><td>{{ item.calories }} kcal</td><td>{{ item.protein }} g</td><td>{{ item.carbs }} g</td><td>{{ item.fat }} g</td><td>{{ item.source }}</td><td><span :class="['status', item.status === 'ACTIVE' ? 'active' : 'locked']">{{ item.status === 'ACTIVE' ? '已上架' : '已下架' }}</span></td><td class="content-actions"><button v-if="canManageCatalog" class="table-action" type="button" @click="editFood(item)">编辑</button><button v-if="canManageCatalog" class="table-action" type="button" @click="changeFoodStatus(item, item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')">{{ item.status === 'ACTIVE' ? '下架' : '上架' }}</button><button v-if="canManageCatalog" class="table-action danger" type="button" @click="removeFood(item)">删除</button></td></tr></tbody></table><div v-if="!foodCatalogItems.length" class="empty">暂无食物目录数据</div></div>
+          <div class="table-wrap"><table><thead><tr><th>食物</th><th>媒体</th><th>份量</th><th>热量</th><th>蛋白质</th><th>碳水</th><th>脂肪</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in foodCatalogItems" :key="item.id"><td><strong>{{ item.name }}</strong><small>{{ item.id }}</small></td><td><div class="catalog-resource-strip"><template v-for="(asset, index) in item.mediaAssets ?? []" :key="asset.objectName || index"><a :href="resolveMediaUrl(asset.url)" target="_blank" rel="noreferrer" :title="asset.fileName"><img v-if="asset.fileType.startsWith('image/') || isImageUrl(asset.url)" :src="resolveMediaUrl(asset.url)" :alt="asset.fileName" /><video v-else-if="asset.fileType.startsWith('video/') || isVideoUrl(asset.url)" :src="resolveMediaUrl(asset.url)" muted preload="metadata" /><span v-else>{{ asset.fileName.split('.').pop()?.toUpperCase() }}</span></a></template><a v-if="!item.mediaAssets?.length && item.mediaUrl" :href="resolveMediaUrl(item.mediaUrl)" target="_blank" rel="noreferrer" title="打开媒体"><img v-if="isImageUrl(item.mediaUrl)" :src="resolveMediaUrl(item.mediaUrl)" alt="食物媒体" /><video v-else-if="isVideoUrl(item.mediaUrl)" :src="resolveMediaUrl(item.mediaUrl)" muted preload="metadata" /><span v-else>打开</span></a><span v-if="!item.mediaAssets?.length && !item.mediaUrl" class="media-empty">暂无</span></div></td><td>{{ item.serving }}</td><td>{{ item.calories }} kcal</td><td>{{ item.protein }} g</td><td>{{ item.carbs }} g</td><td>{{ item.fat }} g</td><td>{{ item.source }}</td><td><span :class="['status', item.status === 'ACTIVE' ? 'active' : 'locked']">{{ item.status === 'ACTIVE' ? '已上架' : '已下架' }}</span></td><td class="content-actions"><button v-if="canManageCatalog" class="table-action" type="button" @click="editFood(item)">编辑</button><button v-if="canManageCatalog" class="table-action" type="button" @click="changeFoodStatus(item, item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')">{{ item.status === 'ACTIVE' ? '下架' : '上架' }}</button><button v-if="canManageCatalog" class="table-action danger" type="button" @click="removeFood(item)">删除</button></td></tr></tbody></table><div v-if="!foodCatalogItems.length" class="empty">暂无食物目录数据</div></div><div v-if="foodCatalogTotal" class="catalog-pagination"><span>第 {{ foodCatalogPage }} / {{ foodCatalogPageCount }} 页</span><span class="catalog-pagination-total">共 {{ foodCatalogTotal }} 种食物</span><button class="button" type="button" :disabled="foodCatalogLoading || foodCatalogPage <= 1" @click="changeFoodPage(-1)">上一页</button><button class="button" type="button" :disabled="foodCatalogLoading || foodCatalogPage >= foodCatalogPageCount" @click="changeFoodPage(1)">下一页</button></div>
         </div>
         <div class="dashboard-grid nutrition-grid">
           <article class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">NUTRITION TREND</p><h2>饮食行为趋势</h2></div></div><DashboardChart :option="nutritionTrendOption" :empty="!nutrition?.trend.length" /></article>
@@ -604,7 +648,7 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
       <section v-if="activeModule === 'system' && role === 'SUPER_ADMIN'" class="panel audit-panel module-panel"><div class="panel-heading"><div><p class="eyebrow">SYSTEM ACCESS</p><h2>管理员账号</h2></div><span class="panel-note">超级管理员专属</span></div><form class="account-form" aria-label="创建管理员账号" @submit.prevent="createAccount"><input v-model="accountForm.username" required pattern="[A-Za-z0-9._-]{3,80}" placeholder="用户名" autocomplete="username" /><input v-model="accountForm.displayName" required placeholder="显示名称" /><input v-model="accountForm.password" required minlength="12" type="password" placeholder="初始密码（至少 12 位）" autocomplete="new-password" /><select v-model="accountForm.role"><option value="ADMIN">管理员</option><option value="EMPLOYEE">普通员工</option></select><button class="button primary" type="submit" :disabled="accountLoading">{{ accountLoading ? '创建中…' : '创建账号' }}</button></form><div class="table-wrap"><table><thead><tr><th>用户名</th><th>名称</th><th>角色</th><th>状态</th><th>最后登录</th><th>操作</th></tr></thead><tbody><tr v-for="account in adminAccounts" :key="account.id"><td><strong>{{ account.username }}</strong></td><td>{{ account.displayName }}</td><td>{{ account.role }}</td><td><span :class="['status', account.status === 'ACTIVE' ? 'active' : 'locked']">{{ account.status === 'ACTIVE' ? '正常' : '已锁定' }}</span></td><td>{{ account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : '-' }}</td><td><button class="table-action" type="button" @click="toggleAccount(account)">{{ account.status === 'ACTIVE' ? '锁定' : '解锁' }}</button></td></tr></tbody></table><div v-if="!adminAccounts.length" class="empty">暂无管理员账号</div></div><div class="panel-heading session-heading"><div><p class="eyebrow">ACTIVE SESSIONS</p><h2>管理员会话</h2></div><button class="button" type="button" @click="revokeOtherSessions">撤销其他会话</button></div><div class="table-wrap"><table><thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>最后使用</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="session in adminSessions" :key="session.id"><td><strong>{{ session.username }}</strong><small>{{ session.displayName }}</small></td><td>{{ session.role }}</td><td>{{ new Date(session.createdAt).toLocaleString() }}</td><td>{{ new Date(session.lastUsedAt).toLocaleString() }}</td><td><span :class="['status', session.active ? 'active' : 'locked']">{{ session.active ? '使用中' : '已撤销' }}</span></td><td><button v-if="session.active" class="table-action" type="button" @click="revokeSession(session)">撤销</button><span v-else>-</span></td></tr></tbody></table><div v-if="!adminSessions.length" class="empty">暂无会话</div></div></section>
       <section v-if="activeModule === 'content' && canReadContent" class="panel audit-panel content-center module-panel">
         <div class="panel-heading"><div><p class="eyebrow">CONTENT CENTER</p><h2>内容中心</h2></div><span class="panel-note">{{ contentItems.length }} 条内容</span></div>
-        <div class="content-toolbar"><input v-model="contentSearch" placeholder="搜索标题或摘要" aria-label="搜索内容" @keyup.enter="refreshContent" /><select v-model="contentStatusFilter" aria-label="按状态筛选" @change="refreshContent"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="PUBLISHED">已发布</option><option value="ARCHIVED">已归档</option></select><select v-model="contentTypeFilter" aria-label="按类型筛选" @change="refreshContent"><option value="">全部类型</option><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><button v-if="canManageContent" class="button primary" type="button" :disabled="contentLoading || contentUploading" @click="startNewContent">新建内容</button></div>
+        <div class="content-toolbar"><input v-model="contentSearch" placeholder="搜索标题或摘要" aria-label="搜索内容" @keyup.enter="refreshContent(true)" /><select v-model="contentStatusFilter" aria-label="按状态筛选" @change="refreshContent(true)"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="PUBLISHED">已发布</option><option value="ARCHIVED">已归档</option></select><select v-model="contentTypeFilter" aria-label="按类型筛选" @change="refreshContent(true)"><option value="">全部类型</option><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select><button v-if="canManageContent" class="button primary" type="button" :disabled="contentLoading || contentUploading" @click="startNewContent">新建内容</button></div>
         <form v-if="contentFormOpen && canManageContent" class="content-form" aria-label="内容编辑表单" @submit.prevent="saveContent">
           <input v-model="contentForm.title" required maxlength="180" placeholder="标题" aria-label="内容标题" />
           <select v-model="contentForm.contentType" aria-label="内容类型"><option v-for="(label, type) in contentTypeLabel" :key="type" :value="type">{{ label }}</option></select>
@@ -632,7 +676,7 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', syncModuleFromH
           <div class="form-actions"><button class="button primary" type="submit" :disabled="contentLoading || contentUploading">{{ contentLoading ? '保存中…' : '保存草稿' }}</button><button class="button" type="button" :disabled="contentLoading || contentUploading" @click="discardContentForm">取消</button></div>
         </form>
         <div class="table-wrap content-table"><table><thead><tr><th>标题</th><th>类型</th><th>关联肌群</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in contentItems" :key="item.id"><td><strong>{{ item.title }}</strong><small>{{ item.summary || '无摘要' }}</small></td><td>{{ contentTypeLabel[item.contentType] }}</td><td>{{ anatomyNodes.find((node) => node.id === item.anatomyNodeId)?.nameZh || '-' }}</td><td><span :class="['status', item.status === 'PUBLISHED' ? 'active' : item.status === 'ARCHIVED' ? 'locked' : 'draft']">{{ contentStatusLabel[item.status] }}</span></td><td>{{ new Date(item.updatedAt).toLocaleString() }}</td><td class="content-actions"><button v-if="canManageContent" class="table-action" type="button" @click="editContent(item)">编辑</button><button v-if="canManageContent && item.status === 'DRAFT'" class="table-action" type="button" @click="changeContentStatus(item, 'PUBLISHED')">发布</button><button v-if="canManageContent && item.status === 'PUBLISHED'" class="table-action" type="button" @click="changeContentStatus(item, 'ARCHIVED')">归档</button><button v-if="canManageContent && item.status !== 'PUBLISHED'" class="table-action danger" type="button" @click="removeContent(item)">删除</button></td></tr></tbody></table><div v-if="!contentItems.length" class="empty">暂无文章、视频或其他编辑内容</div></div>
-        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">数据库共 {{ exerciseCatalogTotal }} 个动作 · 当前显示 {{ exerciseCatalogItems.length }} 个</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源预览</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td><div class="catalog-resource-strip"><a v-for="resource in item.resources" :key="resource.id" :href="resolveMediaUrl(resource.resourceUrl)" target="_blank" rel="noreferrer" :title="resource.viewLabel || resource.resourceType"><img v-if="isImageUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" :alt="resource.viewLabel || resource.resourceType" loading="lazy" /><video v-else-if="isVideoUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" muted preload="none" /><span v-else>{{ resource.resourceType }}</span></a><span v-if="!item.resources.length" class="media-empty">暂无资源</span></div></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div></div>
+        <div class="catalog-panel action-catalog-panel"><div class="panel-heading"><div><p class="eyebrow">EXERCISE CATALOG</p><h2>动作目录</h2></div><span class="panel-note">数据库共 {{ exerciseCatalogTotal }} 个动作 · 当前显示 {{ exerciseCatalogItems.length }} 个</span></div><div class="table-wrap"><table><thead><tr><th>动作</th><th>目标肌群</th><th>器械 / 场地</th><th>训练参数</th><th>资源预览</th><th>来源</th></tr></thead><tbody><tr v-for="item in exerciseCatalogItems" :key="item.id"><td><strong>{{ item.nameZh }}</strong><small>{{ item.nameEn }} · {{ item.id }}</small></td><td>{{ item.targetMuscles.join('、') || '-' }}</td><td>{{ item.equipment || '-' }} / {{ item.location || '-' }}</td><td>{{ item.recommendedSets ? `${item.recommendedSets} 组` : '-' }} · {{ item.recommendedReps || '-' }}<small v-if="item.restSecondsMin">休息 {{ item.restSecondsMin }}-{{ item.restSecondsMax ?? item.restSecondsMin }} 秒</small></td><td><div class="catalog-resource-strip"><a v-for="resource in item.resources" :key="resource.id" :href="resolveMediaUrl(resource.resourceUrl)" target="_blank" rel="noreferrer" :title="resource.viewLabel || resource.resourceType"><img v-if="isImageUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" :alt="resource.viewLabel || resource.resourceType" loading="lazy" /><video v-else-if="isVideoUrl(resource.resourceUrl)" :src="resolveMediaUrl(resource.resourceUrl)" muted preload="none" /><span v-else>{{ resource.resourceType }}</span></a><span v-if="!item.resources.length" class="media-empty">暂无资源</span></div></td><td><small>{{ item.sourceImage || '-' }}</small></td></tr></tbody></table><div v-if="!exerciseCatalogItems.length" class="empty">暂无动作目录数据</div></div><div v-if="exerciseCatalogTotal" class="catalog-pagination"><span>第 {{ exerciseCatalogPage }} / {{ exerciseCatalogPageCount }} 页</span><span class="catalog-pagination-total">共 {{ exerciseCatalogTotal }} 个动作</span><button class="button" type="button" :disabled="exerciseCatalogLoading || exerciseCatalogPage <= 1" @click="changeExercisePage(-1)">上一页</button><button class="button" type="button" :disabled="exerciseCatalogLoading || exerciseCatalogPage >= exerciseCatalogPageCount" @click="changeExercisePage(1)">下一页</button></div></div>
       </section>
        <section v-if="activeModule === 'content' && canManageCatalog" class="panel module-panel exercise-editor-picker">
          <div class="panel-heading"><div><p class="eyebrow">EXERCISE EDITOR</p><h2>动作目录编辑</h2></div><span class="panel-note">选择动作后修改数据库内容</span></div>

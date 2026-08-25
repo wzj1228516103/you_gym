@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ChevronRight, Search, X } from 'lucide-react-native';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, Card, IconButton, ScreenHeader } from '../../components/ui';
-import { API_BASE_URL, fetchFoods, FoodItem } from '../../services/api';
+import { fetchFoods, FoodItem, isImageMedia, resolveMediaUrl } from '../../services/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { NutritionStackParamList } from '../../types';
 import { trackEvent } from '../../services/analytics';
@@ -46,9 +46,9 @@ export function FoodSearchScreen({ navigation }: Props) {
 }
 
 function FoodThumbnail({ food }: { food: FoodItem }) {
-  const asset = food.mediaAssets?.find((candidate) => candidate.fileType?.startsWith('image/')) ?? food.mediaAssets?.[0];
-  const source = asset?.url ?? food.mediaUrl ?? undefined;
-  const url = source?.startsWith('http') ? source : source ? `${API_BASE_URL}${source}` : undefined;
+  const asset = food.mediaAssets?.find((candidate) => isImageMedia(candidate.fileType, candidate.url));
+  const source = asset?.url ?? (isImageMedia(undefined, food.mediaUrl) ? food.mediaUrl : undefined);
+  const url = resolveMediaUrl(source);
   return url ? <Image source={{ uri: url }} resizeMode="cover" style={styles.foodImage} /> : <Text style={styles.foodEmoji}>◉</Text>;
 }
 

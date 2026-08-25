@@ -11,9 +11,9 @@ import {
 } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, PrimaryButton, ScreenHeader, SegmentedControl, Tag } from '../../components/ui';
+import { ExerciseMediaPreview, inferExerciseMediaKind } from '../../components/ExerciseMediaPreview';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
-import { API_BASE_URL } from '../../services/api';
 import type { Gender, PlanStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'QuickWorkout'>;
@@ -164,10 +164,10 @@ export function QuickWorkoutScreen({ navigation }: Props) {
           {recommendedExercises.map((exercise) => {
             const active = selectedIds.includes(exercise.id);
             const thumbnail = exercise.mediaResources?.find((resource) => resource.resourceType === 'THUMBNAIL_IMAGE')?.resourceUrl ?? exercise.mediaUrl;
-            const thumbnailUrl = thumbnail?.startsWith('http') ? thumbnail : thumbnail ? `${API_BASE_URL}${thumbnail}` : undefined;
+            const thumbnailResource = exercise.mediaResources?.find((resource) => resource.resourceUrl === thumbnail);
             return (
               <Pressable key={exercise.id} onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: exercise.id })} accessibilityLabel={`查看${exercise.name}详情`} style={[styles.exerciseRow, active && styles.exerciseRowActive]}>
-                <View style={styles.exerciseArt}>{thumbnailUrl ? <Image source={{ uri: thumbnailUrl }} resizeMode="cover" style={styles.exerciseThumbnail} /> : <Dumbbell size={23} color={active ? colors.primary : colors.textSecondary} />}</View>
+                <View style={styles.exerciseArt}><ExerciseMediaPreview url={thumbnail} kind={inferExerciseMediaKind(thumbnailResource?.resourceType, thumbnail)} style={StyleSheet.absoluteFill} accessibilityLabel={`${exercise.name}缩略图`} /></View>
                 <View style={styles.exerciseCopy}><Text style={styles.exerciseName}>{exercise.name}</Text><Text style={styles.exerciseMeta}>{exercise.target} · {exercise.equipment}{exercise.rating > 0 ? ` · ${exercise.rating.toFixed(1)} 分` : ''}</Text></View>
                 <ChevronRight size={18} color={colors.textTertiary} />
                 <Pressable hitSlop={10} accessibilityRole="checkbox" accessibilityState={{ checked: active }} accessibilityLabel={`${active ? '取消选择' : '选择'}${exercise.name}`} onPress={(event) => { event.stopPropagation(); toggleExercise(exercise.id); }} style={[styles.checkBox, active && styles.checkBoxActive]}>{active ? <Check size={15} color={colors.textInverse} strokeWidth={3} /> : null}</Pressable>
@@ -255,7 +255,6 @@ const styles = StyleSheet.create({
   exerciseRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderBottomWidth: 1, borderBottomColor: colors.divider },
   exerciseRowActive: { borderBottomColor: colors.primaryBorder },
   exerciseArt: { width: 48, height: 48, borderRadius: radius.control, backgroundColor: colors.control, alignItems: 'center', justifyContent: 'center' },
-  exerciseThumbnail: { width: '100%', height: '100%', borderRadius: radius.control },
   exerciseCopy: { flex: 1, minWidth: 0 },
   exerciseName: { ...typography.listTitle, color: colors.text },
   exerciseMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },

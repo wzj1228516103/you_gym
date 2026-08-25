@@ -23,10 +23,21 @@ public class FoodCatalogService {
     }
 
     public List<Map<String, Object>> find(String search, String status, int limit) {
+        return find(search, status, limit, 0);
+    }
+
+    public List<Map<String, Object>> find(String search, String status, int limit, int offset) {
         if (status != null && !status.isBlank() && !STATUSES.contains(status)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid food status");
         }
-        return mediaUrlResolver.resolveMany(mapper.find(search, status, Math.max(1, Math.min(limit, 500))));
+        return mediaUrlResolver.resolveMany(mapper.find(search, status, Math.max(1, Math.min(limit, 500)), Math.max(0, offset)));
+    }
+
+    public int count(String search, String status) {
+        if (status != null && !status.isBlank() && !STATUSES.contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid food status");
+        }
+        return mapper.count(search, status);
     }
 
     public Map<String, Object> create(String requestedId, String name, String serving, BigDecimal calories,

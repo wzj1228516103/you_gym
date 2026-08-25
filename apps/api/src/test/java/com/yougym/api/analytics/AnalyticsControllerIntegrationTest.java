@@ -332,6 +332,11 @@ class AnalyticsControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"兼容旧媒体链接\",\"contentType\":\"ARTICLE\",\"mediaUrl\":\"" + orphanObjectName + "\"}"))
                 .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/admin/v1/content")
+                        .header("X-Admin-Test-Token", "local-employee")
+                        .param("search", "兼容旧媒体链接"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].mediaUrl", startsWith("/api/file/mock-media")));
         mockMvc.perform(delete("/api/file/media")
                         .param("objectName", orphanObjectName)
                         .header("X-Admin-Test-Token", "local-admin"))

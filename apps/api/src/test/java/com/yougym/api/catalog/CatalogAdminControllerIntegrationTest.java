@@ -27,6 +27,16 @@ class CatalogAdminControllerIntegrationTest {
                 .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(org.hamcrest.Matchers.greaterThanOrEqualTo(17))))
                 .andExpect(jsonPath("$.items[0].resources").isArray());
 
+        mockMvc.perform(get("/api/admin/v1/exercise-catalog")
+                        .header("X-Admin-Test-Token", "local-admin")
+                        .param("page", "2")
+                        .param("pageSize", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page", is(2)))
+                .andExpect(jsonPath("$.pageSize", is(5)))
+                .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(5)))
+                .andExpect(jsonPath("$.total", org.hamcrest.Matchers.greaterThanOrEqualTo(10)));
+
         String body = """
                 {"id":"admin-test-food","name":"测试燕麦","serving":"50g","calories":190,"protein":6.5,"carbs":32,"fat":4.2,"source":"YOU GYM","status":"ACTIVE"}
                 """;
@@ -40,8 +50,13 @@ class CatalogAdminControllerIntegrationTest {
 
         mockMvc.perform(get("/api/admin/v1/food-catalog")
                         .header("X-Admin-Test-Token", "local-employee")
-                        .param("search", "燕麦"))
+                        .param("search", "燕麦")
+                        .param("page", "1")
+                        .param("pageSize", "1"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page", is(1)))
+                .andExpect(jsonPath("$.pageSize", is(1)))
+                .andExpect(jsonPath("$.total", org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.items", org.hamcrest.Matchers.hasSize(org.hamcrest.Matchers.greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.items[?(@.id == 'admin-test-food')]").isNotEmpty());
 

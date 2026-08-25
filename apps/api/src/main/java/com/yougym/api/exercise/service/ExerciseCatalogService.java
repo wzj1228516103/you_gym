@@ -19,7 +19,13 @@ public class ExerciseCatalogService {
     }
 
     public List<Map<String, Object>> find(String search, String equipment, int limit) {
-        return mediaUrlResolver.resolveMany(mapper.find(search, equipment, Math.max(1, Math.min(limit, 2000))));
+        return find(search, equipment, limit, 0);
+    }
+
+    public List<Map<String, Object>> find(String search, String equipment, int limit, int offset) {
+        int safeLimit = Math.max(1, Math.min(limit, 2000));
+        int safeOffset = Math.max(0, offset);
+        return mediaUrlResolver.resolveMany(mapper.find(search, equipment, safeLimit, safeOffset));
     }
     public int count(String search, String equipment) { return mapper.count(search, equipment); }
     public Map<String, Object> findById(String id) {

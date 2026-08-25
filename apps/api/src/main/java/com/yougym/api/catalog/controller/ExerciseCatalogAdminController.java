@@ -36,13 +36,20 @@ public class ExerciseCatalogAdminController {
 
     @GetMapping
     public Map<String, Object> list(@RequestParam(required = false) String search,
-                                    @RequestParam(defaultValue = "100") int limit,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(defaultValue = "24") int pageSize,
                                     HttpServletRequest request) {
         var principal = access.authorize(request, AdminPermission.CONTENT_READ);
-        var items = service.find(search, null, Math.max(1, Math.min(limit, 2000)));
+        int safePageSize = limit == null ? Math.max(1, Math.min(pageSize, 200)) : Math.max(1, Math.min(limit, 2000));
+        int total = service.count(search, null);
+        int pageCount = Math.max(1, (int) Math.ceil((double) total / safePageSize));
+        int safePage = Math.max(1, Math.min(Math.min(page, 100_000), pageCount));
+        int offset = (safePage - 1) * safePageSize;
+        var items = service.find(search, null, safePageSize, offset);
         audit.record(principal, "EXERCISE_CATALOG_VIEWED", "exercise_catalog", null, request,
-                Map.of("count", items.size()));
-        return Map.of("source", "exercise_catalog", "items", items, "total", service.count(search, null));
+                Map.of("count", items.size(), "page", safePage, "pageSize", safePageSize));
+        return Map.of("source", "exercise_catalog", "items", items, "total", total, "page", safePage, "pageSize", safePageSize);
     }
 
     @PatchMapping("/{id}")

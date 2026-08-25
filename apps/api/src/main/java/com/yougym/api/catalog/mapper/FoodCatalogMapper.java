@@ -25,6 +25,10 @@ public class FoodCatalogMapper {
     }
 
     public List<Map<String, Object>> find(String search, String status, int limit) {
+        return find(search, status, limit, 0);
+    }
+
+    public List<Map<String, Object>> find(String search, String status, int limit, int offset) {
         StringBuilder sql = new StringBuilder("SELECT id,name_zh AS name,serving_label AS serving,calories_per_100g AS calories,protein_per_100g AS protein,carbs_per_100g AS carbs,fat_per_100g AS fat,source,status,media_url AS mediaUrl,media_assets_json AS mediaAssetsJson,created_at AS createdAt,updated_at AS updatedAt FROM food_catalog WHERE 1=1");
         List<Object> args = new ArrayList<>();
         if (status != null && !status.isBlank()) {
@@ -37,9 +41,24 @@ public class FoodCatalogMapper {
             args.add(pattern);
             args.add(pattern);
         }
-        sql.append(" ORDER BY updated_at DESC,name_zh LIMIT ?");
+        sql.append(" ORDER BY updated_at DESC,name_zh LIMIT ? OFFSET ?");
         args.add(limit);
+        args.add(offset);
         return jdbc.queryForList(sql.toString(), args.toArray()).stream().map(this::copy).toList();
+    }
+
+    public int count(String search, String status) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM food_catalog WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        if (status != null && !status.isBlank()) { sql.append(" AND status=?"); args.add(status); }
+        if (search != null && !search.isBlank()) {
+            sql.append(" AND (LOWER(name_zh) LIKE ? OR LOWER(source) LIKE ?)");
+            String pattern = "%" + search.trim().toLowerCase() + "%";
+            args.add(pattern);
+            args.add(pattern);
+        }
+        Integer count = jdbc.queryForObject(sql.toString(), Integer.class, args.toArray());
+        return count == null ? 0 : count;
     }
 
     public Map<String, Object> findById(String id) {

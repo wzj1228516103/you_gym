@@ -33,12 +33,18 @@ public class FoodCatalogAdminController {
     @GetMapping
     public Map<String, Object> list(@RequestParam(required = false) String search,
                                     @RequestParam(required = false) String status,
-                                    @RequestParam(defaultValue = "200") int limit,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(defaultValue = "24") int pageSize,
                                     HttpServletRequest request) {
         var principal = access.authorize(request, AdminPermission.CATALOG_READ);
-        var items = service.find(search, status, limit);
-        audit.record(principal, "FOOD_CATALOG_VIEWED", "food_catalog", null, request, Map.of("count", items.size()));
-        return Map.of("items", items);
+        int safePageSize = limit == null ? Math.max(1, Math.min(pageSize, 200)) : Math.max(1, Math.min(limit, 500));
+        int total = service.count(search, status);
+        int pageCount = Math.max(1, (int) Math.ceil((double) total / safePageSize));
+        int safePage = Math.max(1, Math.min(Math.min(page, 100_000), pageCount));
+        var items = service.find(search, status, safePageSize, (safePage - 1) * safePageSize);
+        audit.record(principal, "FOOD_CATALOG_VIEWED", "food_catalog", null, request, Map.of("count", items.size(), "page", safePage, "pageSize", safePageSize));
+        return Map.of("items", items, "total", total, "page", safePage, "pageSize", safePageSize);
     }
 
     @PostMapping

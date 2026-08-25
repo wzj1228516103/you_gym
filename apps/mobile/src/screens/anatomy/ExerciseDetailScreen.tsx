@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AlertTriangle, Bookmark, Check, Dumbbell, ShieldCheck, Star } from 'lucide-react-native';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AlertTriangle, Bookmark, Check, ShieldCheck, Star } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
+import { ExerciseMediaPreview, inferExerciseMediaKind, normalizeExerciseMediaUrl } from '../../components/ExerciseMediaPreview';
 import { useAppState } from '../../state/AppState';
 import { serverAnatomyId } from '../../data/anatomyMerge';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
-import { API_BASE_URL, ExerciseContent, fetchExercise, fetchPublishedExerciseContent } from '../../services/api';
+import { ExerciseContent, fetchExercise, fetchPublishedExerciseContent } from '../../services/api';
 import { translateExerciseName } from '../../data/exerciseNameZh';
 import type { AnatomyStackParamList } from '../../types';
 
@@ -25,8 +26,7 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
   const [catalogExercise, setCatalogExercise] = useState<import('../../services/api').ExerciseCatalogItem | null>(null);
   const [selectedResourceUrl, setSelectedResourceUrl] = useState<string | null>(null);
   const added = todayExerciseIds.includes(exercise.id);
-  const normalizeMediaUrl = (url: string | null | undefined) => !url ? undefined : url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-  const catalogMediaUrl = normalizeMediaUrl(exercise.mediaUrl);
+  const catalogMediaUrl = normalizeExerciseMediaUrl(exercise.mediaUrl);
   const mediaResources = catalogExercise?.resources ?? exercise.mediaResources ?? [];
   const displayName = translateExerciseName(catalogExercise?.nameZh ?? exercise.name);
   const displaySteps = catalogExercise?.datasetDetail?.instructionSteps?.zh?.length ? catalogExercise.datasetDetail.instructionSteps.zh : exercise.steps;
@@ -34,12 +34,15 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
 
   useEffect(() => {
     trackEvent('exercise_detail_viewed', { exerciseId: exercise.id, name: displayName }, { screenId: 'exercise_detail' });
+    setCatalogExercise(null);
+    setSelectedResourceUrl(null);
+    setContent(null);
     let active = true;
     void fetchExercise(exercise.sourceId ?? exercise.id).then((item) => {
       if (!active) return;
       setCatalogExercise(item);
       const firstResource = item.resources.find((resource) => resource.resourceType === 'THUMBNAIL_IMAGE') ?? item.resources[0];
-      if (firstResource) setSelectedResourceUrl(normalizeMediaUrl(firstResource.resourceUrl) ?? null);
+      if (firstResource) setSelectedResourceUrl(normalizeExerciseMediaUrl(firstResource.resourceUrl) ?? null);
     }).catch(() => { if (active) setCatalogExercise(null); });
     void fetchPublishedExerciseContent(displayName, nodeId ? serverAnatomyId(nodeId) : undefined).then(({ items }) => {
       if (!active) return;
@@ -60,17 +63,26 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
       <View style={styles.metaRow}><Tag>{exercise.target}</Tag><Tag>{exercise.equipment}</Tag><Tag>{exercise.location}</Tag></View>
 
       <View style={styles.media}>
-        {activeMediaUrl ? <Image source={{ uri: activeMediaUrl }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={76} color={colors.muscle} strokeWidth={1.4} />}
+        <ExerciseMediaPreview
+          url={activeMediaUrl}
+          kind={selectedResourceUrl
+            ? inferExerciseMediaKind(mediaResources.find((resource) => normalizeExerciseMediaUrl(resource.resourceUrl) === selectedResourceUrl)?.resourceType, selectedResourceUrl)
+            : inferExerciseMediaKind(undefined, content?.mediaUrl, content?.contentType)}
+          style={StyleSheet.absoluteFill}
+          interactive
+          accessibilityLabel={`${displayName}媒体`}
+        />
         <Text style={styles.mediaNote}>{selectedResourceUrl?.toLowerCase().includes('.gif') ? '动作演示 GIF · 自动播放' : content ? `${content.contentType === 'VIDEO' ? '视频' : content.contentType === 'GIF' ? 'GIF' : content.contentType === 'MODEL_3D' ? '3D 模型' : '训练内容'} · 已发布` : '动作图片'}</Text>
       </View>
       {mediaResources.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaResourceRow}>
         {mediaResources.map((resource) => {
-          const resourceUrl = normalizeMediaUrl(resource.resourceUrl) ?? resource.resourceUrl;
+          const resourceUrl = normalizeExerciseMediaUrl(resource.resourceUrl) ?? resource.resourceUrl;
           const selected = selectedResourceUrl === resource.resourceUrl || selectedResourceUrl === resourceUrl;
-          const isGif = resource.resourceType === 'ANIMATION_GIF' || resource.resourceUrl.toLowerCase().includes('.gif');
-          return <Pressable key={resource.id} accessibilityRole="button" accessibilityLabel={`查看${isGif ? '动作演示 GIF' : '动作图片'}`} onPress={() => setSelectedResourceUrl(resourceUrl)} style={[styles.mediaResource, selected && styles.mediaResourceSelected]}>
-            <Image source={{ uri: resourceUrl }} resizeMode="cover" style={styles.mediaResourceImage} />
-            <Text style={styles.mediaResourceLabel}>{isGif ? 'GIF 演示' : '动作图片'}</Text>
+          const kind = inferExerciseMediaKind(resource.resourceType, resourceUrl);
+          const isGif = kind === 'gif';
+          return <Pressable key={resource.id} accessibilityRole="button" accessibilityLabel={`查看${isGif ? '动作演示 GIF' : kind === 'video' ? '视频资源' : kind === 'model' ? '3D 模型资源' : '动作图片'}`} onPress={() => setSelectedResourceUrl(resourceUrl)} style={[styles.mediaResource, selected && styles.mediaResourceSelected]}>
+            <ExerciseMediaPreview url={resourceUrl} kind={kind} style={StyleSheet.absoluteFill} accessibilityLabel={`${displayName}资源`} />
+            <Text style={styles.mediaResourceLabel}>{isGif ? 'GIF 演示' : kind === 'video' ? '视频资源' : kind === 'model' ? '3D 模型' : '动作图片'}</Text>
           </Pressable>;
         })}
       </ScrollView> : null}
@@ -110,12 +122,10 @@ const styles = StyleSheet.create({
   english: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.x1 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2, marginTop: spacing.x3 },
   media: { height: 230, borderRadius: radius.card, backgroundColor: '#0D0E11', borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginTop: spacing.x5, overflow: 'hidden' },
-  mediaImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   mediaNote: { ...typography.caption, color: colors.textTertiary, position: 'absolute', left: spacing.x3, bottom: spacing.x3 },
   mediaResourceRow: { gap: spacing.x2, paddingTop: spacing.x3 },
   mediaResource: { width: 92, height: 72, borderRadius: radius.control, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.control, overflow: 'hidden' },
   mediaResourceSelected: { borderColor: colors.primary, borderWidth: 2 },
-  mediaResourceImage: { width: '100%', height: '100%' },
   mediaResourceLabel: { position: 'absolute', left: 4, right: 4, bottom: 4, ...typography.eyebrow, color: colors.text, textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.62)', paddingVertical: 2 },
   ratingRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   rating: { ...typography.body, color: colors.warning, fontWeight: '700' },

@@ -7,8 +7,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -103,12 +105,22 @@ public class ContentService {
     }
 
     private List<ContentRepository.ContentItem> refreshMediaUrls(List<ContentRepository.ContentItem> items) {
-        if (items.stream().allMatch(item -> item.mediaAssets() == null || item.mediaAssets().isEmpty())) return items;
+        if (items == null || items.isEmpty()) return items;
+        Set<String> objectNames = new LinkedHashSet<>();
+        for (ContentRepository.ContentItem item : items) {
+            if (item == null) continue;
+            if (isLikelyObjectName(item.mediaUrl())) objectNames.add(item.mediaUrl());
+            if (item.mediaAssets() != null) {
+                item.mediaAssets().stream()
+                        .map(ContentRepository.ContentMediaAsset::objectName)
+                        .filter(ContentService::isLikelyObjectName)
+                        .forEach(objectNames::add);
+            }
+        }
+        if (objectNames.isEmpty()) return items;
         Map<String, com.yougym.api.integration.ObjectStorageGateway.ResolvedUrl> resolvedUrls;
         try {
-            resolvedUrls = integrationService.resolveObjectUrls(items.stream()
-                    .flatMap(item -> item.mediaAssets() == null ? java.util.stream.Stream.empty() : item.mediaAssets().stream())
-                    .map(ContentRepository.ContentMediaAsset::objectName).distinct().toList());
+            resolvedUrls = integrationService.resolveObjectUrls(objectNames);
         } catch (RuntimeException ignored) {
             return items;
         }
@@ -117,16 +129,25 @@ public class ContentService {
 
     private static ContentRepository.ContentItem refreshMediaUrls(ContentRepository.ContentItem item,
             Map<String, com.yougym.api.integration.ObjectStorageGateway.ResolvedUrl> resolvedUrls) {
-        if (item.mediaAssets() == null || item.mediaAssets().isEmpty()) return item;
-        List<ContentRepository.ContentMediaAsset> refreshed = item.mediaAssets().stream().map(asset -> {
-            var resolved = resolvedUrls.get(asset.objectName());
+        List<ContentRepository.ContentMediaAsset> assets = item.mediaAssets() == null ? List.of() : item.mediaAssets();
+        List<ContentRepository.ContentMediaAsset> refreshed = assets.stream().map(asset -> {
+            var resolved = asset.objectName() == null ? null : resolvedUrls.get(asset.objectName());
             return resolved == null ? asset : new ContentRepository.ContentMediaAsset(resolved.url(), asset.objectName(),
                     asset.fileName(), asset.fileSize(), asset.fileType(), asset.fileETag());
         }).toList();
         String mediaUrl = item.mediaUrl();
-        if (mediaUrl != null && mediaUrl.equals(item.mediaAssets().get(0).url())) mediaUrl = refreshed.get(0).url();
+        if (!assets.isEmpty() && mediaUrl != null && mediaUrl.equals(assets.get(0).url())) mediaUrl = refreshed.get(0).url();
+        if (isLikelyObjectName(mediaUrl)) {
+            var resolved = resolvedUrls.get(mediaUrl);
+            if (resolved != null) mediaUrl = resolved.url();
+        }
         return new ContentRepository.ContentItem(item.id(), item.title(), item.contentType(), item.status(), item.summary(),
                 item.body(), mediaUrl, refreshed, item.anatomyNodeId(), item.createdBy(), item.updatedBy(),
                 item.createdAt(), item.updatedAt(), item.publishedAt());
+    }
+
+    private static boolean isLikelyObjectName(String value) {
+        if (value == null || value.isBlank() || value.contains("://") || value.startsWith("/")) return false;
+        return value.startsWith("content/") || value.contains("/content/");
     }
 }

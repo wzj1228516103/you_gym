@@ -6,6 +6,20 @@ const SESSION_KEY = 'you-gym:app-session:v1';
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL
   ?? (Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080');
 
+export function resolveMediaUrl(url: string | null | undefined) {
+  if (!url) return undefined;
+  const value = url.trim();
+  if (!value) return undefined;
+  if (/^(?:https?:|data:|blob:)/i.test(value)) return value;
+  if (value.startsWith('//')) return `https:${value}`;
+  return `${API_BASE_URL}/${value.replace(/^\/+/, '')}`;
+}
+
+export function isImageMedia(fileType: string | null | undefined, url: string | null | undefined) {
+  return fileType?.toLowerCase().startsWith('image/') === true
+    || /\.(?:jpg|jpeg|png|gif|bmp|webp|avif)(?:[?#]|$)/i.test(url ?? '');
+}
+
 export type AppUser = {
   id: string; phone: string; nickname: string; gender: string | null; birthYear: number | null;
   heightCm: number | null; weightKg: number | null; bodyFatPct: number | null; goal: string | null;
@@ -32,7 +46,7 @@ export type ExerciseContent = {
 export type ExerciseCatalogItem = {
   id: string; nameZh: string; nameEn: string; targetMuscles: string[];
   equipment: string; location: string; difficultyLevel: string | null;
-  recommendedReps: string | null; recommendedSets: number | null;
+  recommendedReps: string | null; recommendedSets: string | number | null;
   restSecondsMin: number | null; restSecondsMax: number | null;
   angleViews: string[]; stepLabels: string[]; sourceImage: string | null;
   sourcePanel: string | null; sourceNote: string | null;

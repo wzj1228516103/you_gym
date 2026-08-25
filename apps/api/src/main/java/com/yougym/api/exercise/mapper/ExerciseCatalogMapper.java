@@ -25,11 +25,15 @@ public class ExerciseCatalogMapper {
     }
 
     public List<Map<String, Object>> find(String search, String equipment, int limit) {
+        return find(search, equipment, limit, 0);
+    }
+
+    public List<Map<String, Object>> find(String search, String equipment, int limit, int offset) {
         StringBuilder sql = new StringBuilder("SELECT id,name_zh AS nameZh,name_en AS nameEn,target_muscles_json AS targetMusclesJson,equipment,location,difficulty_level AS difficultyLevel,recommended_reps AS recommendedReps,recommended_sets AS recommendedSets,rest_seconds_min AS restSecondsMin,rest_seconds_max AS restSecondsMax,angle_views_json AS angleViewsJson,step_labels_json AS stepLabelsJson,source_image AS sourceImage,source_panel AS sourcePanel,source_note AS sourceNote FROM exercise_catalog WHERE status='ACTIVE'");
         var args = new java.util.ArrayList<Object>();
         if (search != null && !search.isBlank()) { sql.append(" AND (LOWER(name_zh) LIKE ? OR LOWER(name_en) LIKE ?)"); String pattern = "%" + search.toLowerCase() + "%"; args.add(pattern); args.add(pattern); }
         if (equipment != null && !equipment.isBlank()) { sql.append(" AND equipment = ?"); args.add(equipment); }
-        sql.append(" ORDER BY CASE WHEN source_panel='Exercises Dataset' THEN 1 ELSE 0 END, id LIMIT ?"); args.add(limit);
+        sql.append(" ORDER BY CASE WHEN source_panel='Exercises Dataset' THEN 1 ELSE 0 END, id LIMIT ? OFFSET ?"); args.add(limit); args.add(offset);
         var rows = jdbc.queryForList(sql.toString(), args.toArray());
         var resources = findResources(rows.stream().map(row -> value(row, "id")).toList());
         return rows.stream().map(row -> withParsedFields(row, false, resources.getOrDefault(String.valueOf(value(row, "id")), List.of()))).toList();

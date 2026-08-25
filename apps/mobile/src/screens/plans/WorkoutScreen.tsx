@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Dumbbell, Info, Minus, Plus } from 'lucide-react-native';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Info, Minus, Plus } from 'lucide-react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SecondaryButton, Tag } from '../../components/ui';
+import { ExerciseMediaPreview, inferExerciseMediaKind, normalizeExerciseMediaUrl } from '../../components/ExerciseMediaPreview';
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
-import { API_BASE_URL } from '../../services/api';
 import type { PlanStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'Workout'>;
@@ -64,7 +64,16 @@ export function WorkoutScreen({ navigation }: Props) {
     <AppScreen>
       <ScreenHeader title={exercise.name} onBack={navigation.goBack} actions={<IconButton icon={Info} label="训练信息" size={42} />} />
       <Text style={styles.progress}>第 {exerciseIndex + 1} / {todayExercises.length} 个动作 · 第 {currentSet} / {exercise.sets} 组</Text>
-      <View style={styles.media}>{exercise.mediaUrl ? <Image source={{ uri: exercise.mediaUrl.startsWith('http') ? exercise.mediaUrl : `${API_BASE_URL}${exercise.mediaUrl}` }} resizeMode="cover" style={styles.mediaImage} /> : <Dumbbell size={68} color={colors.muscle} />}<Text style={styles.mediaText}>{exercise.mediaUrl ? '动作目录媒体' : '暂无动作媒体'}</Text></View>
+      <View style={styles.media}>
+        <ExerciseMediaPreview
+          url={normalizeExerciseMediaUrl(exercise.mediaUrl)}
+          kind={inferExerciseMediaKind(exercise.mediaResources?.find((resource) => normalizeExerciseMediaUrl(resource.resourceUrl) === normalizeExerciseMediaUrl(exercise.mediaUrl))?.resourceType, exercise.mediaUrl)}
+          style={StyleSheet.absoluteFill}
+          interactive
+          accessibilityLabel={`${exercise.name}媒体`}
+        />
+        <Text style={styles.mediaText}>{exercise.mediaUrl ? '动作目录媒体' : '暂无动作媒体'}</Text>
+      </View>
       <View style={styles.paramTags}><Tag>{exercise.reps}</Tag><Tag>{weight} kg</Tag><Tag>休息 {exercise.restSeconds}s</Tag></View>
 
       <Card style={styles.controlCard}>
@@ -88,7 +97,6 @@ function Stepper({ value, suffix, onMinus, onPlus, decimal = false }: { value: n
 const styles = StyleSheet.create({
   progress: { ...typography.caption, color: colors.textSecondary, marginTop: -spacing.x3, marginBottom: spacing.x3 },
   media: { height: 230, borderRadius: radius.card, borderWidth: 1, borderColor: colors.border, backgroundColor: '#0E0F12', alignItems: 'center', justifyContent: 'center' },
-  mediaImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%', borderRadius: radius.card },
   mediaText: { ...typography.caption, color: colors.textTertiary, position: 'absolute', left: spacing.x3, bottom: spacing.x3, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: spacing.x2, paddingVertical: spacing.x1, borderRadius: radius.small },
   paramTags: { flexDirection: 'row', gap: spacing.x2, marginTop: spacing.x3 },
   controlCard: { marginTop: spacing.x4 },
