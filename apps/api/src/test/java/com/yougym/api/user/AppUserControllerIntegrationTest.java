@@ -53,10 +53,17 @@ class AppUserControllerIntegrationTest {
         mockMvc.perform(get("/api/v1/me/measurements").header("Authorization", authorization).param("limit", "10"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1))).andExpect(jsonPath("$.items[0].waistCm", is(82.0)));
         mockMvc.perform(get("/api/v1/me/reminders").header("Authorization", authorization))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(false)));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(false)))
+                .andExpect(jsonPath("$.settings.trainingTime", is("08:00"))).andExpect(jsonPath("$.settings.nutritionTime", is("12:00")))
+                .andExpect(jsonPath("$.settings.timezone", is("Asia/Shanghai")));
         mockMvc.perform(put("/api/v1/me/reminders").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"trainingEnabled\":true,\"nutritionEnabled\":true,\"restSoundEnabled\":false}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(true))).andExpect(jsonPath("$.settings.nutritionEnabled", is(true)));
+                        .content("{\"trainingEnabled\":true,\"nutritionEnabled\":true,\"restSoundEnabled\":false,\"trainingTime\":\"07:30\",\"nutritionTime\":\"12:00\",\"timezone\":\"Asia/Shanghai\",\"quietHoursStart\":\"22:00\",\"quietHoursEnd\":\"07:00\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(true))).andExpect(jsonPath("$.settings.nutritionEnabled", is(true)))
+                .andExpect(jsonPath("$.settings.trainingTime", is("07:30"))).andExpect(jsonPath("$.settings.timezone", is("Asia/Shanghai")))
+                .andExpect(jsonPath("$.settings.quietHoursEnd", is("07:00")));
+        mockMvc.perform(put("/api/v1/me/reminders").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trainingEnabled\":true,\"nutritionEnabled\":true,\"restSoundEnabled\":false,\"timezone\":\"Mars/Olympus\"}"))
+                .andExpect(status().isBadRequest());
         String notificationId = java.util.UUID.randomUUID().toString();
         jdbc.update("INSERT INTO user_notification (id,user_id,notification_type,title,summary,deep_link,important,created_at) SELECT ?,id,'PLAN','计划已准备好','你的训练计划可以开始了。','yougym://plan/full-body-beginner',false,CURRENT_TIMESTAMP FROM app_user WHERE phone=?", notificationId, phone);
         mockMvc.perform(get("/api/v1/me/notifications").header("Authorization", authorization))

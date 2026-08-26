@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { BellRing, TimerReset, Utensils } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, Card, ScreenHeader, SettingRow } from '../../components/ui';
 import { fetchReminderSettings, ReminderSettings, saveReminderSettings } from '../../services/api';
 import { useAuthState } from '../../state/AuthState';
@@ -12,12 +12,14 @@ import type { ProfileStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ReminderSettings'>;
 const LOCAL_SETTINGS_KEY = 'you-gym:reminder-settings:v1';
-const defaultSettings: ReminderSettings = { trainingEnabled: false, nutritionEnabled: false, restSoundEnabled: false, updatedAt: null };
+const defaultSettings: ReminderSettings = { trainingEnabled: false, nutritionEnabled: false, restSoundEnabled: false, trainingTime: '08:00', nutritionTime: '12:00', timezone: 'Asia/Shanghai', quietHoursStart: null, quietHoursEnd: null, updatedAt: null };
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function ReminderSettingsScreen({ navigation }: Props) {
   const { token, guest } = useAuthState();
   const [settings, setSettings] = useState<ReminderSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const [timeError, setTimeError] = useState('');
   useFocusEffect(useCallback(() => {
     let active = true;
     setLoading(true);
@@ -31,11 +33,22 @@ export function ReminderSettingsScreen({ navigation }: Props) {
     void load();
     return () => { active = false; };
   }, [token]));
+  const persist = (next: ReminderSettings) => {
+    if (token) void saveReminderSettings(token, { trainingEnabled: next.trainingEnabled, nutritionEnabled: next.nutritionEnabled, restSoundEnabled: next.restSoundEnabled, trainingTime: next.trainingTime, nutritionTime: next.nutritionTime, timezone: next.timezone, quietHoursStart: next.quietHoursStart, quietHoursEnd: next.quietHoursEnd }).catch(() => { void saveLocalSettings(next); });
+    else void saveLocalSettings(next);
+  };
   const update = (key: 'trainingEnabled' | 'nutritionEnabled' | 'restSoundEnabled', value: boolean) => {
     const next = { ...settings, [key]: value };
     setSettings(next);
-    if (token) void saveReminderSettings(token, { trainingEnabled: next.trainingEnabled, nutritionEnabled: next.nutritionEnabled, restSoundEnabled: next.restSoundEnabled }).catch(() => { void saveLocalSettings(next); });
-    else void saveLocalSettings(next);
+    persist(next);
+  };
+  const updateTime = (key: 'trainingTime' | 'nutritionTime' | 'quietHoursStart' | 'quietHoursEnd', value: string, save = false) => {
+    const normalized = value.trim();
+    const next = { ...settings, [key]: normalized || null };
+    setSettings(next);
+    if (save && normalized && !TIME_PATTERN.test(normalized)) { setTimeError('时间请使用 HH:mm 格式'); return; }
+    if (save) setTimeError('');
+    if (save) persist(next);
   };
   return (
     <AppScreen>
@@ -50,9 +63,28 @@ export function ReminderSettingsScreen({ navigation }: Props) {
       <Card style={styles.group}>
         <SettingRow icon={TimerReset} title="休息计时声音" toggle enabled={settings.restSoundEnabled} onToggle={(value) => update('restSoundEnabled', value)} />
       </Card>
+      <Card style={styles.group}>
+        <Text style={styles.groupTitle}>提醒时间</Text>
+        <TimeField label="训练提醒" value={settings.trainingTime} onChange={(value) => updateTime('trainingTime', value)} />
+        <TimeField label="饮食提醒" value={settings.nutritionTime} onChange={(value) => updateTime('nutritionTime', value)} />
+        <Text style={styles.timezone}>时区：{settings.timezone}</Text>
+      </Card>
+      <Card style={styles.group}>
+        <Text style={styles.groupTitle}>免打扰时段（可选）</Text>
+        <View style={styles.timeRow}>
+          <TimeField label="开始" value={settings.quietHoursStart} onChange={(value) => updateTime('quietHoursStart', value)} />
+          <TimeField label="结束" value={settings.quietHoursEnd} onChange={(value) => updateTime('quietHoursEnd', value)} />
+        </View>
+        <Text style={styles.timezone}>提醒调度接入后将遵守该时段。</Text>
+      </Card>
+      {timeError ? <Text style={styles.timeError}>{timeError}</Text> : null}
       <Text style={styles.note}>普通训练和饮食提醒只使用本地通知或 Push。阿里云短信仅用于验证码、账号安全和重要通知。</Text>
     </AppScreen>
   );
+}
+
+function TimeField({ label, value, onChange }: { label: string; value: string | null; onChange: (value: string, save?: boolean) => void }) {
+  return <View style={styles.timeField}><Text style={styles.timeLabel}>{label}</Text><TextInput value={value ?? ''} onChangeText={(next) => onChange(next)} onEndEditing={(event) => onChange(event.nativeEvent.text, true)} placeholder="HH:mm" placeholderTextColor={colors.textTertiary} keyboardType="numbers-and-punctuation" maxLength={5} style={styles.timeInput} /> </View>;
 }
 
 async function loadLocalSettings(): Promise<ReminderSettings> {
@@ -72,4 +104,11 @@ const styles = StyleSheet.create({
   group: { marginBottom: spacing.x3, paddingVertical: 0 },
   pending: { ...typography.caption, color: colors.warning, marginBottom: spacing.x4 },
   note: { ...typography.caption, color: colors.textSecondary, paddingHorizontal: spacing.x2, marginTop: spacing.x2 },
+  groupTitle: { ...typography.listTitle, color: colors.text, marginBottom: spacing.x2 },
+  timeRow: { flexDirection: 'row', gap: spacing.x3 },
+  timeField: { flex: 1, gap: spacing.x1, marginBottom: spacing.x2 },
+  timeLabel: { ...typography.caption, color: colors.textSecondary },
+  timeInput: { minHeight: 44, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 8, backgroundColor: colors.control, color: colors.text, paddingHorizontal: spacing.x3, ...typography.body },
+  timezone: { ...typography.caption, color: colors.textTertiary, marginTop: spacing.x1 },
+  timeError: { ...typography.caption, color: colors.error, paddingHorizontal: spacing.x2, marginTop: -spacing.x1 },
 });

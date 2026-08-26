@@ -93,6 +93,7 @@ POST  /api/v1/me/measurements
 GET   /api/v1/me/measurements
 GET   /api/v1/me/reminders
 PUT   /api/v1/me/reminders
+# 提醒设置支持 trainingTime、nutritionTime、timezone、quietHoursStart、quietHoursEnd
 GET   /api/v1/me/notifications?unreadOnly=false&limit=50
 POST  /api/v1/me/notifications/{notificationId}/read
 POST  /api/v1/me/notifications/read-all

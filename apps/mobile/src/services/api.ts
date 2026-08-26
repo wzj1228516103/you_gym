@@ -44,7 +44,9 @@ export type BodyMeasurement = {
   note: string | null; measuredAt: string;
 };
 export type ReminderSettings = {
-  trainingEnabled: boolean; nutritionEnabled: boolean; restSoundEnabled: boolean; updatedAt: string | null;
+  trainingEnabled: boolean; nutritionEnabled: boolean; restSoundEnabled: boolean;
+  trainingTime: string | null; nutritionTime: string | null; timezone: string;
+  quietHoursStart: string | null; quietHoursEnd: string | null; updatedAt: string | null;
 };
 export type UserNotification = {
   id: string; type: string; title: string; summary: string | null; deepLink: string | null;

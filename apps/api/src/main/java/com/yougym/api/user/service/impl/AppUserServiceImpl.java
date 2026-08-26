@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
@@ -108,7 +109,12 @@ public class AppUserServiceImpl implements AppUserService {
     }
     @Override public List<Map<String,Object>> bodyMeasurements(String token,int limit){return mapper.bodyMeasurements(requireUser(token).id(),clamp(limit));}
     @Override public Map<String,Object> reminderSettings(String token){return mapper.reminderSettings(requireUser(token).id());}
-    @Override public Map<String,Object> updateReminderSettings(String token, UpdateReminderSettingsRequest request){return mapper.updateReminderSettings(requireUser(token).id(), request, Instant.now());}
+    @Override public Map<String,Object> updateReminderSettings(String token, UpdateReminderSettingsRequest request){
+        String timezone = request.timezone() == null || request.timezone().isBlank() ? "Asia/Shanghai" : request.timezone().trim();
+        try { ZoneId.of(timezone); } catch (Exception invalidTimezone) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的时区"); }
+        UpdateReminderSettingsRequest normalized = new UpdateReminderSettingsRequest(request.trainingEnabled(), request.nutritionEnabled(), request.restSoundEnabled(), request.trainingTime(), request.nutritionTime(), timezone, request.quietHoursStart(), request.quietHoursEnd());
+        return mapper.updateReminderSettings(requireUser(token).id(), normalized, Instant.now());
+    }
     @Override public List<Map<String,Object>> notifications(String token, boolean unreadOnly, int limit){return mapper.notifications(requireUser(token).id(), unreadOnly, clamp(limit));}
     @Override public long unreadNotificationCount(String token){return mapper.unreadNotificationCount(requireUser(token).id());}
     @Override public Map<String,Object> markNotificationRead(String token, String notificationId){
