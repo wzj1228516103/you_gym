@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, SegmentedControl, ScreenHeader, Tag } from '../../components/ui';
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead, type UserNotification } from '../../services/api';
+import { openAppDeepLink } from '../../services/notificationLinks';
 import { useAuthState } from '../../state/AuthState';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { ProfileStackParamList } from '../../types';
@@ -46,7 +47,7 @@ export function NotificationsScreen({ navigation }: Props) {
       {!loading && error ? <Card style={styles.errorCard}><AlertCircle size={20} color={colors.error} /><Text style={styles.errorText}>{error}</Text></Card> : null}
       {!loading && !error && !token ? <EmptyState title="登录后同步通知" body="游客模式下不会伪造通知数据。" /> : null}
       {!loading && !error && token && items.length === 0 ? <EmptyState title={filter === 'UNREAD' ? '暂无未读通知' : '暂无通知'} body="新的计划、资源和账号消息会显示在这里。" /> : null}
-      {!loading && !error && items.length > 0 ? <View style={styles.list}>{items.map((item) => <NotificationCard key={item.id} item={item} onPress={() => void markRead(item)} />)}</View> : null}
+      {!loading && !error && items.length > 0 ? <View style={styles.list}>{items.map((item) => <NotificationCard key={item.id} item={item} onPress={() => { void markRead(item); void openAppDeepLink(item.deepLink); }} />)}</View> : null}
     </AppScreen>
   );
 }

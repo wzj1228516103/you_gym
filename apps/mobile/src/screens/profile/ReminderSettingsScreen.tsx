@@ -82,7 +82,7 @@ export function ReminderSettingsScreen({ navigation }: Props) {
           <TimeField label="开始" value={settings.quietHoursStart} onChange={(value) => updateTime('quietHoursStart', value)} />
           <TimeField label="结束" value={settings.quietHoursEnd} onChange={(value) => updateTime('quietHoursEnd', value)} />
         </View>
-        <Text style={styles.timezone}>提醒调度接入后将遵守该时段。</Text>
+        <Text style={styles.timezone}>训练和饮食提醒会跳过该时段。</Text>
       </Card>
       {timeError ? <Text style={styles.timeError}>{timeError}</Text> : null}
       <Text style={styles.note}>普通训练和饮食提醒只使用本地通知或 Push。阿里云短信仅用于验证码、账号安全和重要通知。</Text>

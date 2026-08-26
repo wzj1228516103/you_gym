@@ -1,7 +1,10 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bell, BellRing, Bookmark, ChevronRight, Database, Download, Goal, ShieldCheck, UserRound } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, Metric, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
+import { fetchReminderSettings } from '../../services/api';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { ProfileStackParamList } from '../../types';
 import { useAuthState } from '../../state/AuthState';
@@ -9,7 +12,22 @@ import { useAuthState } from '../../state/AuthState';
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileHome'>;
 
 export function ProfileHomeScreen({ navigation }: Props) {
-  const { user, guest } = useAuthState();
+  const { token, user, guest } = useAuthState();
+  const [reminderSummary, setReminderSummary] = useState(guest ? '本机保存' : '加载中');
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (!token) {
+      setReminderSummary('本机保存');
+      return () => { active = false; };
+    }
+    setReminderSummary('加载中');
+    void fetchReminderSettings(token).then(({ settings }) => {
+      if (!active) return;
+      const enabled = [settings.trainingEnabled, settings.nutritionEnabled].filter(Boolean).length;
+      setReminderSummary(enabled ? `${enabled} 项提醒已开启` : '未开启');
+    }).catch(() => { if (active) setReminderSummary('暂不可用'); });
+    return () => { active = false; };
+  }, [token]));
   return (
     <AppScreen>
       <ScreenHeader title="个人" actions={<IconButton icon={BellRing} label="通知中心" size={42} onPress={() => navigation.navigate('Notifications')} />} />
@@ -25,7 +43,7 @@ export function ProfileHomeScreen({ navigation }: Props) {
         <MenuRow icon={Database} label="身体数据" value="查看趋势" onPress={() => navigation.navigate('BodyData')} />
         <MenuRow icon={Bookmark} label="我的收藏" value="动作收藏" onPress={() => navigation.navigate('Favorites')} />
         <MenuRow icon={Goal} label="目标与经验" value={[user?.goal, user?.experienceLevel].filter(Boolean).join(' · ') || '未设置'} />
-        <MenuRow icon={Bell} label="提醒设置" value="尚未同步" onPress={() => navigation.navigate('ReminderSettings')} />
+        <MenuRow icon={Bell} label="提醒设置" value={reminderSummary} onPress={() => navigation.navigate('ReminderSettings')} />
         <MenuRow icon={Download} label="下载与缓存" value="查看本机" onPress={() => navigation.navigate('Storage')} />
         <MenuRow icon={ShieldCheck} label="账号与隐私" onPress={() => navigation.navigate('AccountSecurity')} />
         <MenuRow icon={Bell} label="帮助与反馈" value="查看常见问题" onPress={() => navigation.navigate('Help')} />

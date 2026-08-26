@@ -1,4 +1,4 @@
-import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
+import { DarkTheme, LinkingOptions, NavigationContainer, Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -38,6 +38,7 @@ import { flushAnalyticsEventsToApi, startAnalyticsSession, trackEvent } from './
 import { AppStateProvider } from './src/state/AppState';
 import { AuthStateProvider } from './src/state/AuthState';
 import { ReminderNotificationBootstrap } from './src/components/ReminderNotificationBootstrap';
+import { NotificationNavigationBootstrap } from './src/components/NotificationNavigationBootstrap';
 import { useAuthState } from './src/state/AuthState';
 import { colors, radius, spacing, typography } from './src/theme';
 import type { AnatomyStackParamList, CommunityStackParamList, MainTabParamList, NutritionStackParamList, PlanStackParamList, ProfileStackParamList, RootStackParamList } from './src/types';
@@ -53,6 +54,26 @@ const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
 const navigationTheme: Theme = {
   ...DarkTheme,
   colors: { ...DarkTheme.colors, primary: colors.primary, background: colors.background, card: colors.card, text: colors.text, border: colors.border, notification: colors.muscle },
+};
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ['yougym://'],
+  config: {
+    screens: {
+      Auth: 'auth',
+      Otp: 'otp',
+      Onboarding: 'onboarding',
+      Main: {
+        screens: {
+          AnatomyTab: { screens: { AnatomyHome: 'anatomy' } },
+          PlansTab: { screens: { PlanHome: 'plans' } },
+          NutritionTab: { screens: { NutritionHome: 'nutrition' } },
+          CommunityTab: { screens: { CommunityHome: 'community' } },
+          ProfileTab: { screens: { ProfileHome: 'profile', Notifications: 'notifications' } },
+        },
+      },
+    },
+  },
 };
 
 function AnatomyNavigator() {
@@ -144,8 +165,9 @@ export default function App() {
     <SafeAreaProvider>
       <AuthStateProvider>
       <ReminderNotificationBootstrap />
+      <NotificationNavigationBootstrap />
       <AppStateProvider>
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer linking={linking} theme={navigationTheme}>
           <StatusBar style="light" />
           <RootNavigator />
         </NavigationContainer>
