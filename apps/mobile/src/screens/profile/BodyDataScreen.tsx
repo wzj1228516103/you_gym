@@ -46,9 +46,13 @@ export function BodyDataScreen({ navigation }: Props) {
       const result = await saveBodyMeasurement(token, { ...values, measuredAt: new Date().toISOString() });
       setHistory((current) => [result.measurement, ...current].slice(0, 200));
       const profileValues = Object.fromEntries(['heightCm', 'weightKg', 'bodyFatPct'].map((key) => [key, values[key]]).filter(([, value]) => value != null));
-      if (Object.keys(profileValues).length) await updateProfile(profileValues);
+      let profileSyncFailed = false;
+      if (Object.keys(profileValues).length) {
+        try { await updateProfile(profileValues); } catch { profileSyncFailed = true; }
+      }
       setForm({ heightCm: '', weightKg: '', bodyFatPct: '', waistCm: '', chestCm: '', hipCm: '', armCm: '' });
       setFormOpen(false);
+      if (profileSyncFailed) setError('测量记录已保存，但当前资料同步失败，请稍后重试。');
     } catch (cause) { setError(cause instanceof Error ? cause.message : '保存身体数据失败'); }
     finally { setSaving(false); }
   };
