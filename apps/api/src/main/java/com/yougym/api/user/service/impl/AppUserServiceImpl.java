@@ -115,6 +115,11 @@ public class AppUserServiceImpl implements AppUserService {
         UpdateReminderSettingsRequest normalized = new UpdateReminderSettingsRequest(request.trainingEnabled(), request.nutritionEnabled(), request.restSoundEnabled(), request.trainingTime(), request.nutritionTime(), timezone, request.quietHoursStart(), request.quietHoursEnd());
         return mapper.updateReminderSettings(requireUser(token).id(), normalized, Instant.now());
     }
+    @Override public Map<String,Object> nutritionGoal(String token){return mapper.nutritionGoal(requireUser(token).id());}
+    @Override public Map<String,Object> updateNutritionGoal(String token, UpdateNutritionGoalRequest request){
+        return mapper.updateNutritionGoal(requireUser(token).id(), request, Instant.now());
+    }
+    @Override public void clearNutritionGoal(String token){mapper.clearNutritionGoal(requireUser(token).id());}
     @Override public List<Map<String,Object>> notifications(String token, boolean unreadOnly, int limit){return mapper.notifications(requireUser(token).id(), unreadOnly, clamp(limit));}
     @Override public long unreadNotificationCount(String token){return mapper.unreadNotificationCount(requireUser(token).id());}
     @Override public Map<String,Object> markNotificationRead(String token, String notificationId){

@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -64,6 +65,20 @@ class AppUserControllerIntegrationTest {
         mockMvc.perform(put("/api/v1/me/reminders").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"trainingEnabled\":true,\"nutritionEnabled\":true,\"restSoundEnabled\":false,\"timezone\":\"Mars/Olympus\"}"))
                 .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/me/nutrition-goal").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.goal", nullValue()));
+        mockMvc.perform(put("/api/v1/me/nutrition-goal").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"calories\":2200,\"proteinG\":160,\"carbohydratesG\":240,\"fatG\":70}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.goal.calories", is(2200.0)))
+                .andExpect(jsonPath("$.goal.proteinG", is(160.0))).andExpect(jsonPath("$.goal.carbohydratesG", is(240.0)))
+                .andExpect(jsonPath("$.goal.fatG", is(70.0)));
+        mockMvc.perform(get("/api/v1/me/nutrition-goal").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.goal.calories", is(2200.0)));
+        mockMvc.perform(put("/api/v1/me/nutrition-goal").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"calories\":200,\"proteinG\":0,\"carbohydratesG\":240,\"fatG\":70}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(delete("/api/v1/me/nutrition-goal").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.cleared", is(true)));
         String notificationId = java.util.UUID.randomUUID().toString();
         jdbc.update("INSERT INTO user_notification (id,user_id,notification_type,title,summary,deep_link,important,created_at) SELECT ?,id,'PLAN','计划已准备好','你的训练计划可以开始了。','yougym://plan/full-body-beginner',false,CURRENT_TIMESTAMP FROM app_user WHERE phone=?", notificationId, phone);
         mockMvc.perform(get("/api/v1/me/notifications").header("Authorization", authorization))

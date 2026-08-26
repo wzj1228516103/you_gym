@@ -69,6 +69,7 @@ export type NutritionStackParamList = {
   NutritionHome: undefined;
   FoodSearch: undefined;
   FoodDetail: { foodId: string };
+  NutritionGoal: undefined;
 };
 
 export type ProfileStackParamList = {

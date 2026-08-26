@@ -89,6 +89,9 @@ POST  /api/v1/me/workouts
 GET   /api/v1/me/workouts
 POST  /api/v1/me/nutrition
 GET   /api/v1/me/nutrition
+GET   /api/v1/me/nutrition-goal
+PUT   /api/v1/me/nutrition-goal
+DELETE /api/v1/me/nutrition-goal
 POST  /api/v1/me/measurements
 GET   /api/v1/me/measurements
 GET   /api/v1/me/reminders

@@ -37,6 +37,9 @@ export type NutritionRecord = {
   id: string; mealName: string; calories: number; proteinG: number; carbohydratesG: number;
   fatG: number; foodCount: number; recordedAt: string;
 };
+export type NutritionGoal = {
+  calories: number; proteinG: number; carbohydratesG: number; fatG: number; updatedAt: string | null;
+};
 
 export type BodyMeasurement = {
   id: string; heightCm: number | null; weightKg: number | null; bodyFatPct: number | null;
@@ -133,6 +136,9 @@ export function saveWorkout(token: string, input: Record<string, unknown>) { ret
 export function saveNutrition(token: string, input: Record<string, unknown>) { return request<{ saved: boolean }>('/api/v1/me/nutrition', { method: 'POST', body: JSON.stringify(input) }, token); }
 export function fetchWorkouts(token: string) { return request<{ items: WorkoutRecord[] }>('/api/v1/me/workouts', {}, token); }
 export function fetchNutrition(token: string) { return request<{ items: NutritionRecord[] }>('/api/v1/me/nutrition', {}, token); }
+export function fetchNutritionGoal(token: string) { return request<{ goal: NutritionGoal | null }>('/api/v1/me/nutrition-goal', {}, token); }
+export function saveNutritionGoal(token: string, goal: Omit<NutritionGoal, 'updatedAt'>) { return request<{ goal: NutritionGoal }>('/api/v1/me/nutrition-goal', { method: 'PUT', body: JSON.stringify(goal) }, token); }
+export function clearNutritionGoal(token: string) { return request<{ cleared: boolean }>('/api/v1/me/nutrition-goal', { method: 'DELETE' }, token); }
 export function fetchBodyMeasurements(token: string) { return request<{ items: BodyMeasurement[] }>('/api/v1/me/measurements', {}, token); }
 export function saveBodyMeasurement(token: string, input: Record<string, unknown>) { return request<{ saved: boolean; measurement: BodyMeasurement }>('/api/v1/me/measurements', { method: 'POST', body: JSON.stringify(input) }, token); }
 export function fetchReminderSettings(token: string) { return request<{ settings: ReminderSettings }>('/api/v1/me/reminders', {}, token); }

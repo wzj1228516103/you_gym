@@ -84,6 +84,24 @@ public class AppUserMapper {
         if (updated == 0) jdbc.update("INSERT INTO user_reminder_setting (user_id,training_enabled,nutrition_enabled,rest_sound_enabled,training_time,nutrition_time,timezone,quiet_hours_start,quiet_hours_end,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)", userId, request.trainingEnabled(), request.nutritionEnabled(), request.restSoundEnabled(), trainingTime, nutritionTime, timezone, request.quietHoursStart(), request.quietHoursEnd(), ts(now));
         return reminderSettings(userId);
     }
+    public Map<String,Object> nutritionGoal(String userId) {
+        List<Map<String,Object>> rows = jdbc.query("SELECT calories,protein_g,carbohydrates_g,fat_g,updated_at FROM user_nutrition_goal WHERE user_id=?", (rs, rowNum) -> {
+            Map<String,Object> value = new LinkedHashMap<>();
+            value.put("calories", rs.getDouble("calories"));
+            value.put("proteinG", rs.getDouble("protein_g"));
+            value.put("carbohydratesG", rs.getDouble("carbohydrates_g"));
+            value.put("fatG", rs.getDouble("fat_g"));
+            value.put("updatedAt", rs.getTimestamp("updated_at"));
+            return value;
+        }, userId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+    public Map<String,Object> updateNutritionGoal(String userId, com.yougym.api.user.dto.UpdateNutritionGoalRequest request, Instant now) {
+        int updated = jdbc.update("UPDATE user_nutrition_goal SET calories=?,protein_g=?,carbohydrates_g=?,fat_g=?,updated_at=? WHERE user_id=?", request.calories(), request.proteinG(), request.carbohydratesG(), request.fatG(), ts(now), userId);
+        if (updated == 0) jdbc.update("INSERT INTO user_nutrition_goal (user_id,calories,protein_g,carbohydrates_g,fat_g,updated_at) VALUES (?,?,?,?,?,?)", userId, request.calories(), request.proteinG(), request.carbohydratesG(), request.fatG(), ts(now));
+        return nutritionGoal(userId);
+    }
+    public void clearNutritionGoal(String userId) { jdbc.update("DELETE FROM user_nutrition_goal WHERE user_id=?", userId); }
     public List<Map<String,Object>> notifications(String userId, boolean unreadOnly, int limit) {
         String sql = "SELECT id,notification_type,title,summary,deep_link,important,read_at,expires_at,created_at FROM user_notification WHERE user_id=? AND (expires_at IS NULL OR expires_at> CURRENT_TIMESTAMP)";
         if (unreadOnly) sql += " AND read_at IS NULL";

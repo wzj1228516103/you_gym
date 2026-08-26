@@ -21,6 +21,9 @@ public interface AppUserService {
     List<Map<String, Object>> bodyMeasurements(String bearerToken, int limit);
     Map<String, Object> reminderSettings(String bearerToken);
     Map<String, Object> updateReminderSettings(String bearerToken, UpdateReminderSettingsRequest request);
+    Map<String, Object> nutritionGoal(String bearerToken);
+    Map<String, Object> updateNutritionGoal(String bearerToken, UpdateNutritionGoalRequest request);
+    void clearNutritionGoal(String bearerToken);
     List<Map<String, Object>> notifications(String bearerToken, boolean unreadOnly, int limit);
     long unreadNotificationCount(String bearerToken);
     Map<String, Object> markNotificationRead(String bearerToken, String notificationId);
