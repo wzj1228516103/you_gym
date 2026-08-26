@@ -11,9 +11,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,6 +57,15 @@ class AppUserControllerIntegrationTest {
                 .andExpect(status().isCreated());
         mockMvc.perform(get("/api/v1/me/plans/full-body-beginner/progress").header("Authorization", authorization))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.progress.completedSessions", is(1)));
+        mockMvc.perform(post("/api/v1/me/favorites/sync").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetType\":\"EXERCISE\",\"ids\":[\"ex-009-squat\",\"ex-001-barbell-bench-press\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ids", hasSize(2)));
+        mockMvc.perform(get("/api/v1/me/favorites").header("Authorization", authorization).param("targetType", "EXERCISE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ids", hasSize(2)));
+        mockMvc.perform(put("/api/v1/me/favorites/EXERCISE/ex-014-lateral-raise").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.saved", is(true)));
+        mockMvc.perform(delete("/api/v1/me/favorites/EXERCISE/ex-014-lateral-raise").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.removed", is(true)));
         mockMvc.perform(get("/api/admin/v1/app-users").header("X-Admin-Test-Token", "local-admin"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
                 .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(50)));

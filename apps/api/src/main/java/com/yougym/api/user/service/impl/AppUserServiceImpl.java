@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -114,6 +115,29 @@ public class AppUserServiceImpl implements AppUserService {
         AppUser user = requireUser(token);
         if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");
         return mapper.planProgress(user.id(), planId);
+    }
+    @Override public List<String> favoriteIds(String token, String targetType) {
+        return mapper.favoriteIds(requireUser(token).id(), normalizeFavoriteType(targetType));
+    }
+    @Override public boolean addFavorite(String token, String targetType, String targetId) {
+        if (targetId == null || targetId.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "favorite target id is required");
+        return mapper.addFavorite(requireUser(token).id(), normalizeFavoriteType(targetType), targetId.trim(), Instant.now());
+    }
+    @Override public boolean removeFavorite(String token, String targetType, String targetId) {
+        if (targetId == null || targetId.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "favorite target id is required");
+        return mapper.removeFavorite(requireUser(token).id(), normalizeFavoriteType(targetType), targetId.trim());
+    }
+    @Override public List<String> syncFavorites(String token, String targetType, List<String> targetIds) {
+        if (targetIds == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "favorite ids are required");
+        Set<String> unique = new java.util.LinkedHashSet<>();
+        for (String targetId : targetIds) if (targetId != null && !targetId.isBlank()) unique.add(targetId.trim());
+        if (unique.size() > 500) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "too many favorite ids");
+        return mapper.mergeFavorites(requireUser(token).id(), normalizeFavoriteType(targetType), List.copyOf(unique), Instant.now());
+    }
+    private static String normalizeFavoriteType(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase();
+        if (!normalized.equals("EXERCISE") && !normalized.equals("PLAN")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported favorite target type");
+        return normalized;
     }
     private AppUser requireUser(String token){if(token==null||token.isBlank())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"missing app bearer token");AppUser u=mapper.findBySessionHash(hash(token));if(u==null)throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"invalid or expired app session");mapper.touchSession(hash(token),Instant.now());return u;}
     private static int clamp(int limit){return Math.max(1,Math.min(limit,200));}

@@ -43,6 +43,7 @@ export type BodyMeasurement = {
   waistCm: number | null; chestCm: number | null; hipCm: number | null; armCm: number | null;
   note: string | null; measuredAt: string;
 };
+export type FavoriteTargetType = 'EXERCISE' | 'PLAN';
 
 export type ExerciseContent = {
   id: string; title: string; contentType: 'ARTICLE' | 'VIDEO' | 'GIF' | 'MODEL_3D' | 'EXERCISE';
@@ -124,6 +125,10 @@ export function fetchWorkouts(token: string) { return request<{ items: WorkoutRe
 export function fetchNutrition(token: string) { return request<{ items: NutritionRecord[] }>('/api/v1/me/nutrition', {}, token); }
 export function fetchBodyMeasurements(token: string) { return request<{ items: BodyMeasurement[] }>('/api/v1/me/measurements', {}, token); }
 export function saveBodyMeasurement(token: string, input: Record<string, unknown>) { return request<{ saved: boolean; measurement: BodyMeasurement }>('/api/v1/me/measurements', { method: 'POST', body: JSON.stringify(input) }, token); }
+export function fetchFavoriteIds(token: string, targetType: FavoriteTargetType = 'EXERCISE') { return request<{ targetType: string; ids: string[] }>(`/api/v1/me/favorites?targetType=${encodeURIComponent(targetType)}`, {}, token); }
+export function addFavorite(token: string, targetType: FavoriteTargetType, targetId: string) { return request<{ saved: boolean; targetType: string; targetId: string }>(`/api/v1/me/favorites/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`, { method: 'PUT' }, token); }
+export function removeFavorite(token: string, targetType: FavoriteTargetType, targetId: string) { return request<{ removed: boolean; targetType: string; targetId: string }>(`/api/v1/me/favorites/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`, { method: 'DELETE' }, token); }
+export function syncFavoriteIds(token: string, targetType: FavoriteTargetType, ids: string[]) { return request<{ targetType: string; ids: string[] }>('/api/v1/me/favorites/sync', { method: 'POST', body: JSON.stringify({ targetType, ids }) }, token); }
 export function fetchAnatomyTree(gender: 'male' | 'female' | 'all' = 'all') { return request<{ version: number; gender: string; view: string; items: AnatomyTreeNode[] }>(`/api/v1/anatomy/tree?gender=${gender}&view=all`); }
 export function fetchPublishedExerciseContent(search?: string, anatomyNodeId?: string) { const query = new URLSearchParams({ contentType: 'EXERCISE', limit: '20' }); if (search) query.set('search', search); if (anatomyNodeId) query.set('anatomyNodeId', anatomyNodeId); return request<{ items: ExerciseContent[] }>(`/api/v1/content?${query.toString()}`); }
 export function fetchExerciseCatalog(search?: string, equipment?: string) { const query = new URLSearchParams({ limit: '2000' }); if (search) query.set('search', search); if (equipment) query.set('equipment', equipment); return request<{ items: ExerciseCatalogItem[]; source: string }>(`/api/v1/exercises?${query.toString()}`); }

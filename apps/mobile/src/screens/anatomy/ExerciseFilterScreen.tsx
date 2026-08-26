@@ -9,7 +9,7 @@ import { ExerciseMediaPreview, inferExerciseMediaKind } from '../../components/E
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
-import { loadFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
+import { loadSyncedFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
 import { useAuthState } from '../../state/AuthState';
 import type { AnatomyStackParamList } from '../../types';
 
@@ -17,7 +17,7 @@ type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseFilter'>;
 
 export function ExerciseFilterScreen({ navigation, route }: Props) {
   const { anatomyNodes, exercises } = useAppState();
-  const { user, guest } = useAuthState();
+  const { user, guest, token } = useAuthState();
   const favoriteScope = user?.id ?? (guest ? 'guest' : 'guest');
   const node = anatomyNodes.find((item) => item.id === route.params.nodeId) ?? anatomyNodes[0];
   useEffect(() => {
@@ -31,9 +31,9 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
   const [bookmarked, setBookmarked] = useState<string[]>([]);
   useFocusEffect(useCallback(() => {
     let active = true;
-    void loadFavoriteExerciseIds(favoriteScope).then((ids) => { if (active) setBookmarked(ids); });
+    void loadSyncedFavoriteExerciseIds(favoriteScope, token).then((ids) => { if (active) setBookmarked(ids); });
     return () => { active = false; };
-  }, [favoriteScope]));
+  }, [favoriteScope, token]));
 
   const results = useMemo(() => exercises.filter((exercise) => (
     node.exerciseIds.includes(exercise.id)
@@ -75,7 +75,7 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
             event.stopPropagation();
             const saved = !bookmarked.includes(exercise.id);
             setBookmarked((current) => saved ? [exercise.id, ...current] : current.filter((id) => id !== exercise.id));
-            void toggleFavoriteExercise(favoriteScope, exercise.id).catch(() => {
+            void toggleFavoriteExercise(favoriteScope, exercise.id, token).catch(() => {
               setBookmarked((current) => saved ? current.filter((id) => id !== exercise.id) : [exercise.id, ...current]);
             });
             trackEvent(saved ? 'exercise_favorited' : 'exercise_unfavorited', { exerciseId: exercise.id }, { screenId: 'exercise_filter' });

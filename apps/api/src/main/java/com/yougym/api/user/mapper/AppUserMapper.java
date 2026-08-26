@@ -92,6 +92,29 @@ public class AppUserMapper {
     public void completePlanSession(String userId, String planId, Instant now) {
         jdbc.update("UPDATE user_training_plan SET completed_sessions=completed_sessions+1,last_completed_at=?,updated_at=? WHERE user_id=? AND plan_id=?", ts(now), ts(now), userId, planId);
     }
+    public List<String> favoriteIds(String userId, String targetType) {
+        return jdbc.query("SELECT target_id FROM user_favorite WHERE user_id=? AND target_type=? ORDER BY created_at DESC, target_id DESC", (rs, rowNum) -> rs.getString("target_id"), userId, targetType);
+    }
+    public boolean addFavorite(String userId, String targetType, String targetId, Instant now) {
+        if (favoriteExists(userId, targetType, targetId)) return false;
+        jdbc.update("INSERT INTO user_favorite (user_id,target_type,target_id,created_at,updated_at) VALUES (?,?,?,?,?)", userId, targetType, targetId, ts(now), ts(now));
+        return true;
+    }
+    public boolean removeFavorite(String userId, String targetType, String targetId) {
+        return jdbc.update("DELETE FROM user_favorite WHERE user_id=? AND target_type=? AND target_id=?", userId, targetType, targetId) > 0;
+    }
+    public List<String> mergeFavorites(String userId, String targetType, List<String> targetIds, Instant now) {
+        for (String targetId : targetIds) {
+            if (!favoriteExists(userId, targetType, targetId)) {
+                jdbc.update("INSERT INTO user_favorite (user_id,target_type,target_id,created_at,updated_at) VALUES (?,?,?,?,?)", userId, targetType, targetId, ts(now), ts(now));
+            }
+        }
+        return favoriteIds(userId, targetType);
+    }
+    private boolean favoriteExists(String userId, String targetType, String targetId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM user_favorite WHERE user_id=? AND target_type=? AND target_id=?", Integer.class, userId, targetType, targetId);
+        return count != null && count > 0;
+    }
     public List<Map<String,Object>> adminUsers(String search, int limit, int offset) { String term = search == null ? null : search.trim().toLowerCase(); if (term == null || term.isBlank()) return jdbc.queryForList("SELECT id,phone,nickname,gender,goal,experience_level AS experienceLevel,status,created_at AS createdAt,last_login_at AS lastLoginAt FROM app_user ORDER BY created_at DESC LIMIT ? OFFSET ?", limit, offset); return jdbc.queryForList("SELECT id,phone,nickname,gender,goal,experience_level AS experienceLevel,status,created_at AS createdAt,last_login_at AS lastLoginAt FROM app_user WHERE LOWER(phone) LIKE ? OR LOWER(nickname) LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?", "%"+term+"%", "%"+term+"%", limit, offset); }
     public long countAdminUsers(String search) { String term = search == null ? null : search.trim().toLowerCase(); Long count = term == null || term.isBlank() ? jdbc.queryForObject("SELECT COUNT(*) FROM app_user", Long.class) : jdbc.queryForObject("SELECT COUNT(*) FROM app_user WHERE LOWER(phone) LIKE ? OR LOWER(nickname) LIKE ?", Long.class, "%"+term+"%", "%"+term+"%"); return count == null ? 0 : count; }
     public List<Map<String,Object>> adminWorkouts(String userId, int limit, int offset) { return userId == null || userId.isBlank() ? jdbc.queryForList("SELECT id,user_id AS userId,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record ORDER BY completed_at DESC LIMIT ? OFFSET ?", limit, offset) : jdbc.queryForList("SELECT id,user_id AS userId,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record WHERE user_id=? ORDER BY completed_at DESC LIMIT ? OFFSET ?", userId, limit, offset); }

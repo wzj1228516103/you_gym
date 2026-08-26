@@ -7,7 +7,7 @@ import { AppScreen, Card, ScreenHeader, Tag } from '../../components/ui';
 import { ExerciseMediaPreview, inferExerciseMediaKind } from '../../components/ExerciseMediaPreview';
 import { useAppState } from '../../state/AppState';
 import { useAuthState } from '../../state/AuthState';
-import { loadFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
+import { loadSyncedFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
 import { trackEvent } from '../../services/analytics';
 import { colors, radius, spacing, typography } from '../../theme';
 import type { Exercise, ProfileStackParamList } from '../../types';
@@ -18,7 +18,7 @@ type DetailProps = NativeStackScreenProps<ProfileStackParamList, 'FavoriteExerci
 
 export function FavoritesScreen({ navigation }: ListProps) {
   const { exercises } = useAppState();
-  const { user, guest } = useAuthState();
+  const { user, guest, token } = useAuthState();
   const scope = user?.id ?? (guest ? 'guest' : 'guest');
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,9 +26,9 @@ export function FavoritesScreen({ navigation }: ListProps) {
     let active = true;
     trackEvent('screen_viewed', { screen: 'favorites', favoriteScope: user?.id ? 'user' : 'guest' }, { screenId: 'favorites' });
     setLoading(true);
-    void loadFavoriteExerciseIds(scope).then((ids) => { if (active) setFavoriteIds(ids); }).finally(() => { if (active) setLoading(false); });
+    void loadSyncedFavoriteExerciseIds(scope, token).then((ids) => { if (active) setFavoriteIds(ids); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [scope]));
+  }, [scope, token]));
 
   const favoriteExercises = useMemo(() => {
     const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
@@ -43,7 +43,7 @@ export function FavoritesScreen({ navigation }: ListProps) {
     {favoriteExercises.map((exercise) => <FavoriteRow key={exercise.id} exercise={exercise} onPress={() => navigation.navigate('FavoriteExerciseDetail', { exerciseId: exercise.id })} onRemove={async () => {
       setFavoriteIds((current) => current.filter((id) => id !== exercise.id));
       try {
-        await toggleFavoriteExercise(scope, exercise.id);
+        await toggleFavoriteExercise(scope, exercise.id, token);
         trackEvent('exercise_unfavorited', { exerciseId: exercise.id }, { screenId: 'favorites' });
       } catch {
         setFavoriteIds((current) => [exercise.id, ...current]);

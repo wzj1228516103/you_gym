@@ -10,7 +10,7 @@ import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
 import { ExerciseContent, fetchExercise, fetchPublishedExerciseContent } from '../../services/api';
 import { translateExerciseName } from '../../data/exerciseNameZh';
-import { loadFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
+import { loadSyncedFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
 import { useAuthState } from '../../state/AuthState';
 import type { AnatomyStackParamList } from '../../types';
 
@@ -22,7 +22,7 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
 
 export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exerciseId: string; nodeId?: string; onBack: () => void }) {
   const { addExercise, todayExerciseIds, exercises } = useAppState();
-  const { user, guest } = useAuthState();
+  const { user, guest, token } = useAuthState();
   const favoriteScope = user?.id ?? (guest ? 'guest' : 'guest');
   const exercise = exercises.find((item) => item.id === exerciseId) ?? exercises[0];
   const [saved, setSaved] = useState(false);
@@ -58,14 +58,14 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
 
   useEffect(() => {
     let active = true;
-    void loadFavoriteExerciseIds(favoriteScope).then((ids) => { if (active) setSaved(ids.includes(exercise.id)); });
+    void loadSyncedFavoriteExerciseIds(favoriteScope, token).then((ids) => { if (active) setSaved(ids.includes(exercise.id)); });
     return () => { active = false; };
-  }, [exercise.id, favoriteScope]);
+  }, [exercise.id, favoriteScope, token]);
 
   const toggleSaved = () => {
     const next = !saved;
     setSaved(next);
-    void toggleFavoriteExercise(favoriteScope, exercise.id).catch(() => setSaved(!next));
+    void toggleFavoriteExercise(favoriteScope, exercise.id, token).catch(() => setSaved(!next));
     trackEvent(next ? 'exercise_favorited' : 'exercise_unfavorited', { exerciseId: exercise.id }, { screenId: 'exercise_detail' });
   };
 
