@@ -76,6 +76,7 @@ export type PlanDetail = PlanSummary & {
 export type PlanProgress = {
   planId: string; status: 'NOT_STARTED' | 'ACTIVE' | 'PAUSED' | 'COMPLETED'; completedSessions: number;
   startedAt: string | null; lastCompletedAt: string | null; updatedAt: string | null;
+  weekStartDate: string; weekCompletedSessions: number; weeklyTarget: number; weeklyCompletionRate: number;
 };
 export type FoodItem = { id: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; mediaUrl?: string | null; mediaAssets?: { url: string; objectName?: string; fileName?: string; fileType?: string }[] };
 
@@ -137,5 +138,6 @@ export function fetchPlans(category?: string, search?: string) { const query = n
 export function fetchPlan(id: string) { return request<PlanDetail>(`/api/v1/plans/${encodeURIComponent(id)}`); }
 export function startPlan(token: string, planId: string) { return request<{ progress: PlanProgress }>(`/api/v1/me/plans/${encodeURIComponent(planId)}/start`, { method: 'POST' }, token); }
 export function fetchPlanProgress(token: string, planId: string) { return request<{ progress: PlanProgress }>(`/api/v1/me/plans/${encodeURIComponent(planId)}/progress`, {}, token); }
+export function updatePlanProgress(token: string, planId: string, status: 'ACTIVE' | 'PAUSED') { return request<{ progress: PlanProgress }>(`/api/v1/me/plans/${encodeURIComponent(planId)}`, { method: 'PATCH', body: JSON.stringify({ status }) }, token); }
 export function fetchFoods(search?: string, signal?: AbortSignal) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); return request<{ items: FoodItem[] }>(`/api/v1/foods?${query.toString()}`, { signal }); }
 export function fetchFood(id: string) { return request<FoodItem>(`/api/v1/foods/${encodeURIComponent(id)}`); }

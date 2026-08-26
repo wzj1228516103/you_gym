@@ -10,7 +10,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,7 +44,7 @@ public class AppUserMapper {
     public AppUser findBySessionHash(String hash) { List<AppUser> rows=jdbc.query("SELECT u.* FROM app_user u JOIN app_user_session s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.status='ACTIVE'", (rs,n)->map(rs), hash, Timestamp.from(Instant.now())); return rows.isEmpty()?null:rows.get(0); }
     public void touchSession(String hash, Instant now) { jdbc.update("UPDATE app_user_session SET last_used_at=? WHERE token_hash=?",ts(now),hash); }
     public boolean deleteSession(String hash) { return jdbc.update("DELETE FROM app_user_session WHERE token_hash=?", hash) > 0; }
-    public void saveWorkout(String userId, CreateWorkoutRecordRequest r, Instant now) { jdbc.update("INSERT INTO workout_record (id,user_id,title,duration_seconds,total_sets,total_volume,calories,metadata_json,completed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)", UUID.randomUUID().toString(),userId,r.title(),r.durationSeconds(),r.totalSets(),r.totalVolume(),r.calories(),json(r.metadata()),ts(r.completedAt()==null?now:r.completedAt()),ts(now)); }
+    public void saveWorkout(String userId, CreateWorkoutRecordRequest r, Instant now, String planId) { jdbc.update("INSERT INTO workout_record (id,user_id,title,duration_seconds,total_sets,total_volume,calories,metadata_json,plan_id,completed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)", UUID.randomUUID().toString(),userId,r.title(),r.durationSeconds(),r.totalSets(),r.totalVolume(),r.calories(),json(r.metadata()),planId,ts(r.completedAt()==null?now:r.completedAt()),ts(now)); }
     public void saveNutrition(String userId, CreateNutritionRecordRequest r, Instant now) { jdbc.update("INSERT INTO nutrition_record (id,user_id,meal_name,calories,protein_g,carbohydrates_g,fat_g,food_count,metadata_json,recorded_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)", UUID.randomUUID().toString(),userId,r.mealName(),r.calories(),r.proteinG(),r.carbohydratesG(),r.fatG(),r.foodCount(),json(r.metadata()),ts(r.recordedAt()==null?now:r.recordedAt()),ts(now)); }
     public List<Map<String,Object>> workouts(String userId, int limit) { return jdbc.queryForList("SELECT id,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record WHERE user_id=? ORDER BY completed_at DESC LIMIT ?",userId,limit); }
     public List<Map<String,Object>> nutrition(String userId, int limit) { return jdbc.queryForList("SELECT id,meal_name AS mealName,calories,protein_g AS proteinG,carbohydrates_g AS carbohydratesG,fat_g AS fatG,food_count AS foodCount,recorded_at AS recordedAt FROM nutrition_record WHERE user_id=? ORDER BY recorded_at DESC LIMIT ?",userId,limit); }
@@ -81,16 +85,40 @@ public class AppUserMapper {
             value.put("startedAt", rs.getTimestamp("started_at"));
             value.put("lastCompletedAt", rs.getTimestamp("last_completed_at"));
             value.put("updatedAt", rs.getTimestamp("updated_at"));
+            addWeekProgress(value, userId, planId);
             return value;
         }, userId, planId);
         if (!rows.isEmpty()) return rows.get(0);
         Map<String,Object> empty = new LinkedHashMap<>();
         empty.put("planId", planId); empty.put("status", "NOT_STARTED"); empty.put("completedSessions", 0);
         empty.put("startedAt", null); empty.put("lastCompletedAt", null); empty.put("updatedAt", null);
+        addWeekProgress(empty, userId, planId);
         return empty;
+    }
+    public boolean updatePlanStatus(String userId, String planId, String status, Instant now) {
+        return jdbc.update("UPDATE user_training_plan SET status=?,updated_at=? WHERE user_id=? AND plan_id=?", status, ts(now), userId, planId) > 0;
     }
     public void completePlanSession(String userId, String planId, Instant now) {
         jdbc.update("UPDATE user_training_plan SET completed_sessions=completed_sessions+1,last_completed_at=?,updated_at=? WHERE user_id=? AND plan_id=?", ts(now), ts(now), userId, planId);
+    }
+    private void addWeekProgress(Map<String,Object> value, String userId, String planId) {
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate weekStart = LocalDate.now(zone).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        Instant start = weekStart.atStartOfDay(zone).toInstant();
+        Instant end = weekStart.plusDays(7).atStartOfDay(zone).toInstant();
+        Integer completed = jdbc.queryForObject("SELECT COUNT(*) FROM workout_record WHERE user_id=? AND plan_id=? AND completed_at>=? AND completed_at<?", Integer.class, userId, planId, ts(start), ts(end));
+        String durationLabel = jdbc.queryForObject("SELECT duration_label FROM training_plan WHERE id=?", String.class, planId);
+        int target = weeklyTarget(durationLabel);
+        int count = completed == null ? 0 : completed;
+        value.put("weekStartDate", weekStart);
+        value.put("weekCompletedSessions", count);
+        value.put("weeklyTarget", target);
+        value.put("weeklyCompletionRate", target == 0 ? 0.0 : Math.min(1.0, count / (double) target));
+    }
+    private static int weeklyTarget(String durationLabel) {
+        if (durationLabel == null) return 0;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)\\s*天/周").matcher(durationLabel);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
     public List<String> favoriteIds(String userId, String targetType) {
         return jdbc.query("SELECT target_id FROM user_favorite WHERE user_id=? AND target_type=? ORDER BY created_at DESC, target_id DESC", (rs, rowNum) -> rs.getString("target_id"), userId, targetType);

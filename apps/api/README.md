@@ -93,6 +93,7 @@ POST  /api/v1/me/measurements
 GET   /api/v1/me/measurements
 POST  /api/v1/me/plans/{planId}/start
 GET   /api/v1/me/plans/{planId}/progress
+PATCH /api/v1/me/plans/{planId}                 # status: ACTIVE | PAUSED
 GET   /api/v1/me/favorites?targetType=EXERCISE|PLAN
 PUT   /api/v1/me/favorites/{targetType}/{targetId}
 DELETE /api/v1/me/favorites/{targetType}/{targetId}

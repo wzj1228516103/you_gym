@@ -92,9 +92,10 @@ public class AppUserServiceImpl implements AppUserService {
     @Override public void recordWorkout(String token,CreateWorkoutRecordRequest request){
         AppUser user = requireUser(token);
         Instant now = Instant.now();
-        mapper.saveWorkout(user.id(), request, now);
-        Object planId = request.metadata() == null ? null : request.metadata().get("planId");
-        if (planId instanceof String value && !value.isBlank()) mapper.completePlanSession(user.id(), value, now);
+        Object planIdValue = request.metadata() == null ? null : request.metadata().get("planId");
+        String planId = planIdValue instanceof String value && !value.isBlank() && mapper.planExists(value.trim()) ? value.trim() : null;
+        mapper.saveWorkout(user.id(), request, now, planId);
+        if (planId != null) mapper.completePlanSession(user.id(), planId, now);
     }
     @Override public void recordNutrition(String token,CreateNutritionRecordRequest request){mapper.saveNutrition(requireUser(token).id(),request,Instant.now());}
     @Override public List<Map<String,Object>> workouts(String token,int limit){return mapper.workouts(requireUser(token).id(),clamp(limit));}
@@ -114,6 +115,14 @@ public class AppUserServiceImpl implements AppUserService {
     @Override public Map<String,Object> planProgress(String token, String planId) {
         AppUser user = requireUser(token);
         if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");
+        return mapper.planProgress(user.id(), planId);
+    }
+    @Override public Map<String,Object> updatePlanProgress(String token, String planId, String status) {
+        AppUser user = requireUser(token);
+        if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!normalized.equals("ACTIVE") && !normalized.equals("PAUSED")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported plan status");
+        if (!mapper.updatePlanStatus(user.id(), planId, normalized, Instant.now())) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan has not been started");
         return mapper.planProgress(user.id(), planId);
     }
     @Override public List<String> favoriteIds(String token, String targetType) {

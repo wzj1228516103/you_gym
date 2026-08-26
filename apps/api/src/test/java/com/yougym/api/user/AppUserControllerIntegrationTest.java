@@ -56,7 +56,15 @@ class AppUserControllerIntegrationTest {
                         .content("{\"title\":\"计划训练\",\"durationSeconds\":600,\"totalSets\":4,\"totalVolume\":1200,\"calories\":100,\"metadata\":{\"planId\":\"full-body-beginner\"}}"))
                 .andExpect(status().isCreated());
         mockMvc.perform(get("/api/v1/me/plans/full-body-beginner/progress").header("Authorization", authorization))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.progress.completedSessions", is(1)));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.progress.completedSessions", is(1)))
+                .andExpect(jsonPath("$.progress.weekCompletedSessions", is(1)))
+                .andExpect(jsonPath("$.progress.weeklyTarget", is(3)));
+        mockMvc.perform(patch("/api/v1/me/plans/full-body-beginner").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAUSED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.progress.status", is("PAUSED")));
+        mockMvc.perform(patch("/api/v1/me/plans/full-body-beginner").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.progress.status", is("ACTIVE")));
         mockMvc.perform(post("/api/v1/me/favorites/sync").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"targetType\":\"EXERCISE\",\"ids\":[\"ex-009-squat\",\"ex-001-barbell-bench-press\"]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.ids", hasSize(2)));

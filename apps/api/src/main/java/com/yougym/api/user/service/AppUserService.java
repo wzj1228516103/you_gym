@@ -21,6 +21,7 @@ public interface AppUserService {
     List<Map<String, Object>> bodyMeasurements(String bearerToken, int limit);
     Map<String, Object> startPlan(String bearerToken, String planId);
     Map<String, Object> planProgress(String bearerToken, String planId);
+    Map<String, Object> updatePlanProgress(String bearerToken, String planId, String status);
     List<String> favoriteIds(String bearerToken, String targetType);
     boolean addFavorite(String bearerToken, String targetType, String targetId);
     boolean removeFavorite(String bearerToken, String targetType, String targetId);

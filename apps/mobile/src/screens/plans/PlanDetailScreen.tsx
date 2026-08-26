@@ -1,10 +1,11 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Bookmark, Check, Clock3, Dumbbell } from 'lucide-react-native';
+import { Bookmark, Check, Clock3, Dumbbell, Pause, Play } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, PrimaryButton, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
-import { fetchPlan, fetchPlanProgress, PlanDetail, PlanProgress, startPlan } from '../../services/api';
+import { fetchPlan, fetchPlanProgress, PlanDetail, PlanProgress, startPlan, updatePlanProgress } from '../../services/api';
+import { loadSyncedFavoritePlanIds, toggleFavoritePlan } from '../../services/favorites';
 import { useAppState } from '../../state/AppState';
 import { useAuthState } from '../../state/AuthState';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -14,25 +15,38 @@ type Props = NativeStackScreenProps<PlanStackParamList, 'PlanDetail'>;
 
 export function PlanDetailScreen({ navigation, route }: Props) {
   const { exercises, replaceTodayExercises } = useAppState();
-  const { token } = useAuthState();
+  const { token, user, guest } = useAuthState();
+  const favoriteScope = user?.id ?? (guest ? 'guest' : 'guest');
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [progress, setProgress] = useState<PlanProgress | null>(null);
+  const [planSaved, setPlanSaved] = useState(false);
+  const [updatingProgress, setUpdatingProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useFocusEffect(useCallback(() => {
     let active = true;
     void fetchPlan(route.params.planId).then((result) => { if (active) { setPlan(result); setError(null); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : '计划加载失败'); });
     if (token) void fetchPlanProgress(token, route.params.planId).then((result) => { if (active) setProgress(result.progress); }).catch(() => { if (active) setProgress(null); });
     else setProgress(null);
+    void loadSyncedFavoritePlanIds(favoriteScope, token).then((ids) => { if (active) setPlanSaved(ids.includes(route.params.planId)); });
     return () => { active = false; };
-  }, [route.params.planId, token]));
+  }, [favoriteScope, route.params.planId, token]));
   if (!plan) return <AppScreen><ScreenHeader title="计划详情" onBack={navigation.goBack} />{error ? <Text style={styles.body}>{error}</Text> : <Text style={styles.body}>计划加载中…</Text>}</AppScreen>;
   return (
     <AppScreen>
-      <ScreenHeader title="计划详情" onBack={navigation.goBack} actions={<IconButton icon={Bookmark} label="收藏计划" size={42} />} />
+      <ScreenHeader title="计划详情" onBack={navigation.goBack} actions={<IconButton icon={Bookmark} label={planSaved ? '取消收藏计划' : '收藏计划'} active={planSaved} size={42} onPress={() => {
+        const next = !planSaved;
+        setPlanSaved(next);
+        void toggleFavoritePlan(favoriteScope, plan.id, token).catch(() => setPlanSaved(!next));
+      }} />} />
       <View style={styles.hero}><Dumbbell size={54} color={colors.muscle} /><Tag tone="primary">{plan.level}</Tag></View>
       <Text style={styles.title}>{plan.title}</Text>
       <View style={styles.metrics}><Metric icon={Clock3} value={estimateSessionDuration(plan.exercises.length)} label="预计单次时长" /><Metric icon={Dumbbell} value={plan.durationLabel} label="训练频率" /><Metric icon={Check} value={`${plan.exerciseCount} 个`} label="动作数量" /></View>
-      <Card style={styles.progressCard}><View style={styles.progressCopy}><Text style={styles.progressTitle}>计划进度</Text><Text style={styles.progressMeta}>{progress?.status === 'ACTIVE' ? `已完成 ${progress.completedSessions} 次训练` : progress?.status === 'COMPLETED' ? `已完成 ${progress.completedSessions} 次训练` : '尚未开始训练'}</Text></View><Tag tone={progress?.status === 'ACTIVE' ? 'primary' : 'neutral'}>{progress?.status === 'ACTIVE' ? '进行中' : progress?.status === 'COMPLETED' ? '已完成' : '未开始'}</Tag></Card>
+      <Card style={styles.progressCard}><View style={styles.progressCopy}><Text style={styles.progressTitle}>计划进度</Text><Text style={styles.progressMeta}>{progress?.status === 'ACTIVE' || progress?.status === 'PAUSED' || progress?.status === 'COMPLETED' ? `累计完成 ${progress.completedSessions} 次训练` : '尚未开始训练'}</Text>{progress ? <Text style={styles.progressMeta}>本周 {progress.weekCompletedSessions}/{progress.weeklyTarget || '-'} 次</Text> : null}</View><Tag tone={progress?.status === 'ACTIVE' ? 'primary' : 'neutral'}>{progress?.status === 'ACTIVE' ? '进行中' : progress?.status === 'PAUSED' ? '已暂停' : progress?.status === 'COMPLETED' ? '已完成' : '未开始'}</Tag>{token && (progress?.status === 'ACTIVE' || progress?.status === 'PAUSED') ? <IconButton icon={progress.status === 'ACTIVE' ? Pause : Play} label={progress.status === 'ACTIVE' ? '暂停计划' : '恢复计划'} size={40} active={updatingProgress} onPress={() => {
+        if (updatingProgress) return;
+        const nextStatus = progress.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+        setUpdatingProgress(true);
+        void updatePlanProgress(token, plan.id, nextStatus).then((result) => setProgress(result.progress)).catch((cause) => setError(cause instanceof Error ? cause.message : '计划状态更新失败')).finally(() => setUpdatingProgress(false));
+      }} /> : null}</Card>
 
       <SectionHeader title="计划说明" />
       <Card><Text style={styles.body}>{plan.description}</Text></Card>
