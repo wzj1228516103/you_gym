@@ -43,6 +43,9 @@ export type BodyMeasurement = {
   waistCm: number | null; chestCm: number | null; hipCm: number | null; armCm: number | null;
   note: string | null; measuredAt: string;
 };
+export type ReminderSettings = {
+  trainingEnabled: boolean; nutritionEnabled: boolean; restSoundEnabled: boolean; updatedAt: string | null;
+};
 export type FavoriteTargetType = 'EXERCISE' | 'PLAN';
 
 export type ExerciseContent = {
@@ -126,6 +129,8 @@ export function fetchWorkouts(token: string) { return request<{ items: WorkoutRe
 export function fetchNutrition(token: string) { return request<{ items: NutritionRecord[] }>('/api/v1/me/nutrition', {}, token); }
 export function fetchBodyMeasurements(token: string) { return request<{ items: BodyMeasurement[] }>('/api/v1/me/measurements', {}, token); }
 export function saveBodyMeasurement(token: string, input: Record<string, unknown>) { return request<{ saved: boolean; measurement: BodyMeasurement }>('/api/v1/me/measurements', { method: 'POST', body: JSON.stringify(input) }, token); }
+export function fetchReminderSettings(token: string) { return request<{ settings: ReminderSettings }>('/api/v1/me/reminders', {}, token); }
+export function saveReminderSettings(token: string, input: Omit<ReminderSettings, 'updatedAt'>) { return request<{ settings: ReminderSettings }>('/api/v1/me/reminders', { method: 'PUT', body: JSON.stringify(input) }, token); }
 export function fetchFavoriteIds(token: string, targetType: FavoriteTargetType = 'EXERCISE') { return request<{ targetType: string; ids: string[] }>(`/api/v1/me/favorites?targetType=${encodeURIComponent(targetType)}`, {}, token); }
 export function addFavorite(token: string, targetType: FavoriteTargetType, targetId: string) { return request<{ saved: boolean; targetType: string; targetId: string }>(`/api/v1/me/favorites/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`, { method: 'PUT' }, token); }
 export function removeFavorite(token: string, targetType: FavoriteTargetType, targetId: string) { return request<{ removed: boolean; targetType: string; targetId: string }>(`/api/v1/me/favorites/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`, { method: 'DELETE' }, token); }

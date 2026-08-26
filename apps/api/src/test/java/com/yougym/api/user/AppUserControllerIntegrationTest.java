@@ -50,6 +50,11 @@ class AppUserControllerIntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.saved", is(true))).andExpect(jsonPath("$.measurement.weightKg", is(72.1)));
         mockMvc.perform(get("/api/v1/me/measurements").header("Authorization", authorization).param("limit", "10"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1))).andExpect(jsonPath("$.items[0].waistCm", is(82.0)));
+        mockMvc.perform(get("/api/v1/me/reminders").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(false)));
+        mockMvc.perform(put("/api/v1/me/reminders").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trainingEnabled\":true,\"nutritionEnabled\":true,\"restSoundEnabled\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(true))).andExpect(jsonPath("$.settings.nutritionEnabled", is(true)));
         mockMvc.perform(post("/api/v1/me/plans/full-body-beginner/start").header("Authorization", authorization))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.progress.status", is("ACTIVE"))).andExpect(jsonPath("$.progress.completedSessions", is(0)));
         mockMvc.perform(post("/api/v1/me/workouts").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)

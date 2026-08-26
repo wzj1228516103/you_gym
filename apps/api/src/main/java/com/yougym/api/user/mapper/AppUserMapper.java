@@ -56,6 +56,25 @@ public class AppUserMapper {
         return jdbc.queryForObject("SELECT id,height_cm,weight_kg,body_fat_pct,waist_cm,chest_cm,hip_cm,arm_cm,note,measured_at FROM body_measurement WHERE id=?", (rs, rowNum) -> bodyMeasurement(rs), id);
     }
     public List<Map<String,Object>> bodyMeasurements(String userId, int limit) { return jdbc.query("SELECT id,height_cm,weight_kg,body_fat_pct,waist_cm,chest_cm,hip_cm,arm_cm,note,measured_at FROM body_measurement WHERE user_id=? ORDER BY measured_at DESC LIMIT ?", (rs, rowNum) -> bodyMeasurement(rs), userId, limit); }
+    public Map<String,Object> reminderSettings(String userId) {
+        List<Map<String,Object>> rows = jdbc.query("SELECT training_enabled,nutrition_enabled,rest_sound_enabled,updated_at FROM user_reminder_setting WHERE user_id=?", (rs, rowNum) -> {
+            Map<String,Object> value = new LinkedHashMap<>();
+            value.put("trainingEnabled", rs.getBoolean("training_enabled"));
+            value.put("nutritionEnabled", rs.getBoolean("nutrition_enabled"));
+            value.put("restSoundEnabled", rs.getBoolean("rest_sound_enabled"));
+            value.put("updatedAt", rs.getTimestamp("updated_at"));
+            return value;
+        }, userId);
+        if (!rows.isEmpty()) return rows.get(0);
+        Map<String,Object> defaults = new LinkedHashMap<>();
+        defaults.put("trainingEnabled", false); defaults.put("nutritionEnabled", false); defaults.put("restSoundEnabled", false); defaults.put("updatedAt", null);
+        return defaults;
+    }
+    public Map<String,Object> updateReminderSettings(String userId, com.yougym.api.user.dto.UpdateReminderSettingsRequest request, Instant now) {
+        int updated = jdbc.update("UPDATE user_reminder_setting SET training_enabled=?,nutrition_enabled=?,rest_sound_enabled=?,updated_at=? WHERE user_id=?", request.trainingEnabled(), request.nutritionEnabled(), request.restSoundEnabled(), ts(now), userId);
+        if (updated == 0) jdbc.update("INSERT INTO user_reminder_setting (user_id,training_enabled,nutrition_enabled,rest_sound_enabled,updated_at) VALUES (?,?,?,?,?)", userId, request.trainingEnabled(), request.nutritionEnabled(), request.restSoundEnabled(), ts(now));
+        return reminderSettings(userId);
+    }
     private Map<String,Object> bodyMeasurement(java.sql.ResultSet rs) throws java.sql.SQLException {
         Map<String,Object> value = new LinkedHashMap<>();
         value.put("id", rs.getString("id"));

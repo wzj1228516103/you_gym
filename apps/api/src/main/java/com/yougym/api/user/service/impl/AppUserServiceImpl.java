@@ -107,6 +107,8 @@ public class AppUserServiceImpl implements AppUserService {
         return mapper.saveBodyMeasurement(requireUser(token).id(), request, Instant.now());
     }
     @Override public List<Map<String,Object>> bodyMeasurements(String token,int limit){return mapper.bodyMeasurements(requireUser(token).id(),clamp(limit));}
+    @Override public Map<String,Object> reminderSettings(String token){return mapper.reminderSettings(requireUser(token).id());}
+    @Override public Map<String,Object> updateReminderSettings(String token, UpdateReminderSettingsRequest request){return mapper.updateReminderSettings(requireUser(token).id(), request, Instant.now());}
     @Override public Map<String,Object> startPlan(String token, String planId) {
         AppUser user = requireUser(token);
         if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");

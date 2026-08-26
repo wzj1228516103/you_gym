@@ -91,6 +91,8 @@ POST  /api/v1/me/nutrition
 GET   /api/v1/me/nutrition
 POST  /api/v1/me/measurements
 GET   /api/v1/me/measurements
+GET   /api/v1/me/reminders
+PUT   /api/v1/me/reminders
 POST  /api/v1/me/plans/{planId}/start
 GET   /api/v1/me/plans/{planId}/progress
 PATCH /api/v1/me/plans/{planId}                 # status: ACTIVE | PAUSED
