@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,6 +44,28 @@ public class AppUserMapper {
     public void saveNutrition(String userId, CreateNutritionRecordRequest r, Instant now) { jdbc.update("INSERT INTO nutrition_record (id,user_id,meal_name,calories,protein_g,carbohydrates_g,fat_g,food_count,metadata_json,recorded_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)", UUID.randomUUID().toString(),userId,r.mealName(),r.calories(),r.proteinG(),r.carbohydratesG(),r.fatG(),r.foodCount(),json(r.metadata()),ts(r.recordedAt()==null?now:r.recordedAt()),ts(now)); }
     public List<Map<String,Object>> workouts(String userId, int limit) { return jdbc.queryForList("SELECT id,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record WHERE user_id=? ORDER BY completed_at DESC LIMIT ?",userId,limit); }
     public List<Map<String,Object>> nutrition(String userId, int limit) { return jdbc.queryForList("SELECT id,meal_name AS mealName,calories,protein_g AS proteinG,carbohydrates_g AS carbohydratesG,fat_g AS fatG,food_count AS foodCount,recorded_at AS recordedAt FROM nutrition_record WHERE user_id=? ORDER BY recorded_at DESC LIMIT ?",userId,limit); }
+    public Map<String,Object> saveBodyMeasurement(String userId, com.yougym.api.user.dto.CreateBodyMeasurementRequest r, Instant now) {
+        String id = UUID.randomUUID().toString();
+        Instant measuredAt = r.measuredAt() == null ? now : r.measuredAt();
+        jdbc.update("INSERT INTO body_measurement (id,user_id,height_cm,weight_kg,body_fat_pct,waist_cm,chest_cm,hip_cm,arm_cm,note,measured_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", id, userId, r.heightCm(), r.weightKg(), r.bodyFatPct(), r.waistCm(), r.chestCm(), r.hipCm(), r.armCm(), r.note(), ts(measuredAt), ts(now));
+        jdbc.update("UPDATE app_user SET height_cm=COALESCE(?,height_cm),weight_kg=COALESCE(?,weight_kg),body_fat_pct=COALESCE(?,body_fat_pct),updated_at=? WHERE id=?", r.heightCm(), r.weightKg(), r.bodyFatPct(), ts(now), userId);
+        return jdbc.queryForObject("SELECT id,height_cm,weight_kg,body_fat_pct,waist_cm,chest_cm,hip_cm,arm_cm,note,measured_at FROM body_measurement WHERE id=?", (rs, rowNum) -> bodyMeasurement(rs), id);
+    }
+    public List<Map<String,Object>> bodyMeasurements(String userId, int limit) { return jdbc.query("SELECT id,height_cm,weight_kg,body_fat_pct,waist_cm,chest_cm,hip_cm,arm_cm,note,measured_at FROM body_measurement WHERE user_id=? ORDER BY measured_at DESC LIMIT ?", (rs, rowNum) -> bodyMeasurement(rs), userId, limit); }
+    private Map<String,Object> bodyMeasurement(java.sql.ResultSet rs) throws java.sql.SQLException {
+        Map<String,Object> value = new LinkedHashMap<>();
+        value.put("id", rs.getString("id"));
+        value.put("heightCm", rs.getObject("height_cm"));
+        value.put("weightKg", rs.getObject("weight_kg"));
+        value.put("bodyFatPct", rs.getObject("body_fat_pct"));
+        value.put("waistCm", rs.getObject("waist_cm"));
+        value.put("chestCm", rs.getObject("chest_cm"));
+        value.put("hipCm", rs.getObject("hip_cm"));
+        value.put("armCm", rs.getObject("arm_cm"));
+        value.put("note", rs.getString("note"));
+        value.put("measuredAt", rs.getTimestamp("measured_at"));
+        return value;
+    }
     public List<Map<String,Object>> adminUsers(String search, int limit, int offset) { String term = search == null ? null : search.trim().toLowerCase(); if (term == null || term.isBlank()) return jdbc.queryForList("SELECT id,phone,nickname,gender,goal,experience_level AS experienceLevel,status,created_at AS createdAt,last_login_at AS lastLoginAt FROM app_user ORDER BY created_at DESC LIMIT ? OFFSET ?", limit, offset); return jdbc.queryForList("SELECT id,phone,nickname,gender,goal,experience_level AS experienceLevel,status,created_at AS createdAt,last_login_at AS lastLoginAt FROM app_user WHERE LOWER(phone) LIKE ? OR LOWER(nickname) LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?", "%"+term+"%", "%"+term+"%", limit, offset); }
     public long countAdminUsers(String search) { String term = search == null ? null : search.trim().toLowerCase(); Long count = term == null || term.isBlank() ? jdbc.queryForObject("SELECT COUNT(*) FROM app_user", Long.class) : jdbc.queryForObject("SELECT COUNT(*) FROM app_user WHERE LOWER(phone) LIKE ? OR LOWER(nickname) LIKE ?", Long.class, "%"+term+"%", "%"+term+"%"); return count == null ? 0 : count; }
     public List<Map<String,Object>> adminWorkouts(String userId, int limit, int offset) { return userId == null || userId.isBlank() ? jdbc.queryForList("SELECT id,user_id AS userId,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record ORDER BY completed_at DESC LIMIT ? OFFSET ?", limit, offset) : jdbc.queryForList("SELECT id,user_id AS userId,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record WHERE user_id=? ORDER BY completed_at DESC LIMIT ? OFFSET ?", userId, limit, offset); }

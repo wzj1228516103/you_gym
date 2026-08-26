@@ -17,4 +17,6 @@ public interface AppUserService {
     void recordNutrition(String bearerToken, CreateNutritionRecordRequest request);
     List<Map<String, Object>> workouts(String bearerToken, int limit);
     List<Map<String, Object>> nutrition(String bearerToken, int limit);
+    Map<String, Object> recordBodyMeasurement(String bearerToken, CreateBodyMeasurementRequest request);
+    List<Map<String, Object>> bodyMeasurements(String bearerToken, int limit);
 }

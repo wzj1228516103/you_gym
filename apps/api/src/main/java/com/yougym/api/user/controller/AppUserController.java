@@ -21,5 +21,7 @@ public class AppUserController {
     @GetMapping("/workouts") public Map<String,Object> workouts(@RequestHeader("Authorization") String authorization,@RequestParam(defaultValue="50") int limit){return Map.of("items",service.workouts(token(authorization),limit));}
     @PostMapping("/nutrition") @ResponseStatus(HttpStatus.CREATED) public Map<String,Object> nutrition(@RequestHeader("Authorization") String authorization,@Valid @RequestBody CreateNutritionRecordRequest request){service.recordNutrition(token(authorization),request);return Map.of("saved",true);}
     @GetMapping("/nutrition") public Map<String,Object> nutritionList(@RequestHeader("Authorization") String authorization,@RequestParam(defaultValue="50") int limit){return Map.of("items",service.nutrition(token(authorization),limit));}
+    @PostMapping("/measurements") @ResponseStatus(HttpStatus.CREATED) public Map<String,Object> measurement(@RequestHeader("Authorization") String authorization,@Valid @RequestBody CreateBodyMeasurementRequest request){return Map.of("saved",true,"measurement",service.recordBodyMeasurement(token(authorization),request));}
+    @GetMapping("/measurements") public Map<String,Object> measurements(@RequestHeader("Authorization") String authorization,@RequestParam(defaultValue="50") int limit){return Map.of("items",service.bodyMeasurements(token(authorization),limit));}
     private static String token(String header){return header!=null&&header.startsWith("Bearer ")?header.substring(7).trim():null;}
 }

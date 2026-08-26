@@ -38,6 +38,12 @@ export type NutritionRecord = {
   fatG: number; foodCount: number; recordedAt: string;
 };
 
+export type BodyMeasurement = {
+  id: string; heightCm: number | null; weightKg: number | null; bodyFatPct: number | null;
+  waistCm: number | null; chestCm: number | null; hipCm: number | null; armCm: number | null;
+  note: string | null; measuredAt: string;
+};
+
 export type ExerciseContent = {
   id: string; title: string; contentType: 'ARTICLE' | 'VIDEO' | 'GIF' | 'MODEL_3D' | 'EXERCISE';
   summary: string; body: string; mediaUrl: string; mediaAssets: { url: string; objectName: string; fileName: string; fileSize: number; fileType: string; fileETag: string }[];
@@ -112,6 +118,8 @@ export function saveWorkout(token: string, input: Record<string, unknown>) { ret
 export function saveNutrition(token: string, input: Record<string, unknown>) { return request<{ saved: boolean }>('/api/v1/me/nutrition', { method: 'POST', body: JSON.stringify(input) }, token); }
 export function fetchWorkouts(token: string) { return request<{ items: WorkoutRecord[] }>('/api/v1/me/workouts', {}, token); }
 export function fetchNutrition(token: string) { return request<{ items: NutritionRecord[] }>('/api/v1/me/nutrition', {}, token); }
+export function fetchBodyMeasurements(token: string) { return request<{ items: BodyMeasurement[] }>('/api/v1/me/measurements', {}, token); }
+export function saveBodyMeasurement(token: string, input: Record<string, unknown>) { return request<{ saved: boolean; measurement: BodyMeasurement }>('/api/v1/me/measurements', { method: 'POST', body: JSON.stringify(input) }, token); }
 export function fetchAnatomyTree(gender: 'male' | 'female' | 'all' = 'all') { return request<{ version: number; gender: string; view: string; items: AnatomyTreeNode[] }>(`/api/v1/anatomy/tree?gender=${gender}&view=all`); }
 export function fetchPublishedExerciseContent(search?: string, anatomyNodeId?: string) { const query = new URLSearchParams({ contentType: 'EXERCISE', limit: '20' }); if (search) query.set('search', search); if (anatomyNodeId) query.set('anatomyNodeId', anatomyNodeId); return request<{ items: ExerciseContent[] }>(`/api/v1/content?${query.toString()}`); }
 export function fetchExerciseCatalog(search?: string, equipment?: string) { const query = new URLSearchParams({ limit: '2000' }); if (search) query.set('search', search); if (equipment) query.set('equipment', equipment); return request<{ items: ExerciseCatalogItem[]; source: string }>(`/api/v1/exercises?${query.toString()}`); }

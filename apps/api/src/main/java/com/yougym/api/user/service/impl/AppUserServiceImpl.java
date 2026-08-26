@@ -92,6 +92,13 @@ public class AppUserServiceImpl implements AppUserService {
     @Override public void recordNutrition(String token,CreateNutritionRecordRequest request){mapper.saveNutrition(requireUser(token).id(),request,Instant.now());}
     @Override public List<Map<String,Object>> workouts(String token,int limit){return mapper.workouts(requireUser(token).id(),clamp(limit));}
     @Override public List<Map<String,Object>> nutrition(String token,int limit){return mapper.nutrition(requireUser(token).id(),clamp(limit));}
+    @Override public Map<String,Object> recordBodyMeasurement(String token, CreateBodyMeasurementRequest request) {
+        if (request.heightCm() == null && request.weightKg() == null && request.bodyFatPct() == null && request.waistCm() == null && request.chestCm() == null && request.hipCm() == null && request.armCm() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "至少填写一项身体数据");
+        }
+        return mapper.saveBodyMeasurement(requireUser(token).id(), request, Instant.now());
+    }
+    @Override public List<Map<String,Object>> bodyMeasurements(String token,int limit){return mapper.bodyMeasurements(requireUser(token).id(),clamp(limit));}
     private AppUser requireUser(String token){if(token==null||token.isBlank())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"missing app bearer token");AppUser u=mapper.findBySessionHash(hash(token));if(u==null)throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"invalid or expired app session");mapper.touchSession(hash(token),Instant.now());return u;}
     private static int clamp(int limit){return Math.max(1,Math.min(limit,200));}
     private static String purpose(String value){String p=value.trim().toUpperCase();if(!p.equals("LOGIN")&&!p.equals("REGISTER"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"unsupported verification purpose");return p;}

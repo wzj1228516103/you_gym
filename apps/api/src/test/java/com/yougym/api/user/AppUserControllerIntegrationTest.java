@@ -43,6 +43,11 @@ class AppUserControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/me/nutrition").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mealName\":\"早餐\",\"calories\":400,\"proteinG\":25,\"carbohydratesG\":40,\"fatG\":10,\"foodCount\":2}"))
                 .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/me/measurements").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"weightKg\":72.1,\"bodyFatPct\":18.5,\"waistCm\":82.0}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.saved", is(true))).andExpect(jsonPath("$.measurement.weightKg", is(72.1)));
+        mockMvc.perform(get("/api/v1/me/measurements").header("Authorization", authorization).param("limit", "10"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1))).andExpect(jsonPath("$.items[0].waistCm", is(82.0)));
         mockMvc.perform(get("/api/admin/v1/app-users").header("X-Admin-Test-Token", "local-admin"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
                 .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(50)));
