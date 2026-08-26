@@ -94,6 +94,7 @@ GET   /api/v1/me/measurements
 GET   /api/v1/me/reminders
 PUT   /api/v1/me/reminders
 # 提醒设置支持 trainingTime、nutritionTime、timezone、quietHoursStart、quietHoursEnd
+# App 原生端会按提醒设置创建每日本地通知；Web 端不请求通知权限
 GET   /api/v1/me/notifications?unreadOnly=false&limit=50
 POST  /api/v1/me/notifications/{notificationId}/read
 POST  /api/v1/me/notifications/read-all

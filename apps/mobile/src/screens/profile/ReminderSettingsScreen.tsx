@@ -6,6 +6,7 @@ import { BellRing, TimerReset, Utensils } from 'lucide-react-native';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen, Card, ScreenHeader, SettingRow } from '../../components/ui';
 import { fetchReminderSettings, ReminderSettings, saveReminderSettings } from '../../services/api';
+import { syncReminderNotifications } from '../../services/reminderNotifications';
 import { useAuthState } from '../../state/AuthState';
 import { colors, spacing, typography } from '../../theme';
 import type { ProfileStackParamList } from '../../types';
@@ -20,6 +21,7 @@ export function ReminderSettingsScreen({ navigation }: Props) {
   const [settings, setSettings] = useState<ReminderSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [timeError, setTimeError] = useState('');
+  const [notificationStatus, setNotificationStatus] = useState('');
   useFocusEffect(useCallback(() => {
     let active = true;
     setLoading(true);
@@ -34,8 +36,13 @@ export function ReminderSettingsScreen({ navigation }: Props) {
     return () => { active = false; };
   }, [token]));
   const persist = (next: ReminderSettings) => {
-    if (token) void saveReminderSettings(token, { trainingEnabled: next.trainingEnabled, nutritionEnabled: next.nutritionEnabled, restSoundEnabled: next.restSoundEnabled, trainingTime: next.trainingTime, nutritionTime: next.nutritionTime, timezone: next.timezone, quietHoursStart: next.quietHoursStart, quietHoursEnd: next.quietHoursEnd }).catch(() => { void saveLocalSettings(next); });
-    else void saveLocalSettings(next);
+    const sync = (value: ReminderSettings) => syncReminderNotifications(value).then((result) => {
+      if (result.permissionDenied) setNotificationStatus('系统通知权限未开启，提醒暂时不会显示。');
+      else if (result.skippedByQuietHours) setNotificationStatus(`已安排 ${result.scheduled} 条提醒，${result.skippedByQuietHours} 条因免打扰时段跳过。`);
+      else if (result.supported) setNotificationStatus(result.scheduled ? `已安排 ${result.scheduled} 条每日提醒。` : '提醒已关闭。');
+    }).catch(() => setNotificationStatus('本机通知暂时不可用，请检查系统权限。'));
+    if (token) void saveReminderSettings(token, { trainingEnabled: next.trainingEnabled, nutritionEnabled: next.nutritionEnabled, restSoundEnabled: next.restSoundEnabled, trainingTime: next.trainingTime, nutritionTime: next.nutritionTime, timezone: next.timezone, quietHoursStart: next.quietHoursStart, quietHoursEnd: next.quietHoursEnd }).then((result) => sync(result.settings)).catch(() => { void saveLocalSettings(next); void sync(next); });
+    else { void saveLocalSettings(next); void sync(next); }
   };
   const update = (key: 'trainingEnabled' | 'nutritionEnabled' | 'restSoundEnabled', value: boolean) => {
     const next = { ...settings, [key]: value };
@@ -79,6 +86,7 @@ export function ReminderSettingsScreen({ navigation }: Props) {
       </Card>
       {timeError ? <Text style={styles.timeError}>{timeError}</Text> : null}
       <Text style={styles.note}>普通训练和饮食提醒只使用本地通知或 Push。阿里云短信仅用于验证码、账号安全和重要通知。</Text>
+      {notificationStatus ? <Text style={styles.status}>{notificationStatus}</Text> : null}
     </AppScreen>
   );
 }
@@ -111,4 +119,5 @@ const styles = StyleSheet.create({
   timeInput: { minHeight: 44, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 8, backgroundColor: colors.control, color: colors.text, paddingHorizontal: spacing.x3, ...typography.body },
   timezone: { ...typography.caption, color: colors.textTertiary, marginTop: spacing.x1 },
   timeError: { ...typography.caption, color: colors.error, paddingHorizontal: spacing.x2, marginTop: -spacing.x1 },
+  status: { ...typography.caption, color: colors.primary, paddingHorizontal: spacing.x2, marginTop: spacing.x2 },
 });

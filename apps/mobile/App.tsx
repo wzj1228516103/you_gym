@@ -37,6 +37,7 @@ import { CommunityHomeScreen } from './src/screens/community/CommunityHomeScreen
 import { flushAnalyticsEventsToApi, startAnalyticsSession, trackEvent } from './src/services/analytics';
 import { AppStateProvider } from './src/state/AppState';
 import { AuthStateProvider } from './src/state/AuthState';
+import { ReminderNotificationBootstrap } from './src/components/ReminderNotificationBootstrap';
 import { useAuthState } from './src/state/AuthState';
 import { colors, radius, spacing, typography } from './src/theme';
 import type { AnatomyStackParamList, CommunityStackParamList, MainTabParamList, NutritionStackParamList, PlanStackParamList, ProfileStackParamList, RootStackParamList } from './src/types';
@@ -142,6 +143,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthStateProvider>
+      <ReminderNotificationBootstrap />
       <AppStateProvider>
         <NavigationContainer theme={navigationTheme}>
           <StatusBar style="light" />
