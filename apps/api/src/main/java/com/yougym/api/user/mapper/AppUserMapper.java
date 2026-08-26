@@ -75,6 +75,39 @@ public class AppUserMapper {
         if (updated == 0) jdbc.update("INSERT INTO user_reminder_setting (user_id,training_enabled,nutrition_enabled,rest_sound_enabled,updated_at) VALUES (?,?,?,?,?)", userId, request.trainingEnabled(), request.nutritionEnabled(), request.restSoundEnabled(), ts(now));
         return reminderSettings(userId);
     }
+    public List<Map<String,Object>> notifications(String userId, boolean unreadOnly, int limit) {
+        String sql = "SELECT id,notification_type,title,summary,deep_link,important,read_at,expires_at,created_at FROM user_notification WHERE user_id=? AND (expires_at IS NULL OR expires_at> CURRENT_TIMESTAMP)";
+        if (unreadOnly) sql += " AND read_at IS NULL";
+        sql += " ORDER BY important DESC, created_at DESC LIMIT ?";
+        return jdbc.query(sql, (rs, rowNum) -> notification(rs), userId, limit);
+    }
+    public long unreadNotificationCount(String userId) {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM user_notification WHERE user_id=? AND read_at IS NULL AND (expires_at IS NULL OR expires_at> CURRENT_TIMESTAMP)", Long.class, userId);
+        return count == null ? 0 : count;
+    }
+    public Map<String,Object> findNotification(String userId, String notificationId) {
+        List<Map<String,Object>> rows = jdbc.query("SELECT id,notification_type,title,summary,deep_link,important,read_at,expires_at,created_at FROM user_notification WHERE user_id=? AND id=? AND (expires_at IS NULL OR expires_at> CURRENT_TIMESTAMP)", (rs, rowNum) -> notification(rs), userId, notificationId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+    public boolean markNotificationRead(String userId, String notificationId, Instant now) {
+        return jdbc.update("UPDATE user_notification SET read_at=? WHERE user_id=? AND id=? AND read_at IS NULL AND (expires_at IS NULL OR expires_at> CURRENT_TIMESTAMP)", ts(now), userId, notificationId) > 0;
+    }
+    public int markAllNotificationsRead(String userId, Instant now) {
+        return jdbc.update("UPDATE user_notification SET read_at=? WHERE user_id=? AND read_at IS NULL AND (expires_at IS NULL OR expires_at> CURRENT_TIMESTAMP)", ts(now), userId);
+    }
+    private Map<String,Object> notification(java.sql.ResultSet rs) throws java.sql.SQLException {
+        Map<String,Object> value = new LinkedHashMap<>();
+        value.put("id", rs.getString("id"));
+        value.put("type", rs.getString("notification_type"));
+        value.put("title", rs.getString("title"));
+        value.put("summary", rs.getString("summary"));
+        value.put("deepLink", rs.getString("deep_link"));
+        value.put("important", rs.getBoolean("important"));
+        value.put("readAt", rs.getTimestamp("read_at"));
+        value.put("expiresAt", rs.getTimestamp("expires_at"));
+        value.put("createdAt", rs.getTimestamp("created_at"));
+        return value;
+    }
     private Map<String,Object> bodyMeasurement(java.sql.ResultSet rs) throws java.sql.SQLException {
         Map<String,Object> value = new LinkedHashMap<>();
         value.put("id", rs.getString("id"));

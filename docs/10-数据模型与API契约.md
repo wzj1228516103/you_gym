@@ -277,6 +277,8 @@ POST /me/devices/push-token
 GET  /assets/manifests
 ```
 
+当前 App 用户通知接口已落地为 `/api/v1/me/notifications`：支持 `unreadOnly`、未读数、单条已读和全部已读；通知发送任务和后台编排仍按运营需求接入。
+
 短信不是普通通知偏好中的可选渠道。
 
 ## 11. 管理后台 API

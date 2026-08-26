@@ -109,6 +109,19 @@ public class AppUserServiceImpl implements AppUserService {
     @Override public List<Map<String,Object>> bodyMeasurements(String token,int limit){return mapper.bodyMeasurements(requireUser(token).id(),clamp(limit));}
     @Override public Map<String,Object> reminderSettings(String token){return mapper.reminderSettings(requireUser(token).id());}
     @Override public Map<String,Object> updateReminderSettings(String token, UpdateReminderSettingsRequest request){return mapper.updateReminderSettings(requireUser(token).id(), request, Instant.now());}
+    @Override public List<Map<String,Object>> notifications(String token, boolean unreadOnly, int limit){return mapper.notifications(requireUser(token).id(), unreadOnly, clamp(limit));}
+    @Override public long unreadNotificationCount(String token){return mapper.unreadNotificationCount(requireUser(token).id());}
+    @Override public Map<String,Object> markNotificationRead(String token, String notificationId){
+        if (notificationId == null || notificationId.isBlank() || notificationId.length() > 128) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "notification id is required");
+        AppUser user = requireUser(token);
+        String normalizedId = notificationId.trim();
+        Map<String,Object> notification = mapper.findNotification(user.id(), normalizedId);
+        if (notification == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "notification not found");
+        mapper.markNotificationRead(user.id(), normalizedId, Instant.now());
+        Map<String,Object> updated = mapper.findNotification(user.id(), normalizedId);
+        return updated == null ? notification : updated;
+    }
+    @Override public int markAllNotificationsRead(String token){return mapper.markAllNotificationsRead(requireUser(token).id(), Instant.now());}
     @Override public Map<String,Object> startPlan(String token, String planId) {
         AppUser user = requireUser(token);
         if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");

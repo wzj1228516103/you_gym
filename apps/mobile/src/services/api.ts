@@ -46,6 +46,10 @@ export type BodyMeasurement = {
 export type ReminderSettings = {
   trainingEnabled: boolean; nutritionEnabled: boolean; restSoundEnabled: boolean; updatedAt: string | null;
 };
+export type UserNotification = {
+  id: string; type: string; title: string; summary: string | null; deepLink: string | null;
+  important: boolean; readAt: string | null; expiresAt: string | null; createdAt: string;
+};
 export type FavoriteTargetType = 'EXERCISE' | 'PLAN';
 
 export type ExerciseContent = {
@@ -131,6 +135,9 @@ export function fetchBodyMeasurements(token: string) { return request<{ items: B
 export function saveBodyMeasurement(token: string, input: Record<string, unknown>) { return request<{ saved: boolean; measurement: BodyMeasurement }>('/api/v1/me/measurements', { method: 'POST', body: JSON.stringify(input) }, token); }
 export function fetchReminderSettings(token: string) { return request<{ settings: ReminderSettings }>('/api/v1/me/reminders', {}, token); }
 export function saveReminderSettings(token: string, input: Omit<ReminderSettings, 'updatedAt'>) { return request<{ settings: ReminderSettings }>('/api/v1/me/reminders', { method: 'PUT', body: JSON.stringify(input) }, token); }
+export function fetchNotifications(token: string, unreadOnly = false) { return request<{ items: UserNotification[]; unreadCount: number }>(`/api/v1/me/notifications?unreadOnly=${unreadOnly ? 'true' : 'false'}&limit=50`, {}, token); }
+export function markNotificationRead(token: string, notificationId: string) { return request<{ notification: UserNotification; unreadCount: number }>(`/api/v1/me/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'POST' }, token); }
+export function markAllNotificationsRead(token: string) { return request<{ updated: boolean; unreadCount: number }>('/api/v1/me/notifications/read-all', { method: 'POST' }, token); }
 export function fetchFavoriteIds(token: string, targetType: FavoriteTargetType = 'EXERCISE') { return request<{ targetType: string; ids: string[] }>(`/api/v1/me/favorites?targetType=${encodeURIComponent(targetType)}`, {}, token); }
 export function addFavorite(token: string, targetType: FavoriteTargetType, targetId: string) { return request<{ saved: boolean; targetType: string; targetId: string }>(`/api/v1/me/favorites/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`, { method: 'PUT' }, token); }
 export function removeFavorite(token: string, targetType: FavoriteTargetType, targetId: string) { return request<{ removed: boolean; targetType: string; targetId: string }>(`/api/v1/me/favorites/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`, { method: 'DELETE' }, token); }

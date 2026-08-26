@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -24,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AppUserControllerIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @Autowired JdbcTemplate jdbc;
 
     @Test
     void registersPersistsRecordsAndExposesThemToAdmin() throws Exception {
@@ -55,6 +57,14 @@ class AppUserControllerIntegrationTest {
         mockMvc.perform(put("/api/v1/me/reminders").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"trainingEnabled\":true,\"nutritionEnabled\":true,\"restSoundEnabled\":false}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.settings.trainingEnabled", is(true))).andExpect(jsonPath("$.settings.nutritionEnabled", is(true)));
+        String notificationId = java.util.UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO user_notification (id,user_id,notification_type,title,summary,deep_link,important,created_at) SELECT ?,id,'PLAN','计划已准备好','你的训练计划可以开始了。','yougym://plan/full-body-beginner',false,CURRENT_TIMESTAMP FROM app_user WHERE phone=?", notificationId, phone);
+        mockMvc.perform(get("/api/v1/me/notifications").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1))).andExpect(jsonPath("$.items[0].type", is("PLAN"))).andExpect(jsonPath("$.unreadCount", is(1)));
+        mockMvc.perform(post("/api/v1/me/notifications/" + notificationId + "/read").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.notification.readAt").isNotEmpty()).andExpect(jsonPath("$.unreadCount", is(0)));
+        mockMvc.perform(get("/api/v1/me/notifications").header("Authorization", authorization).param("unreadOnly", "true"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(0))).andExpect(jsonPath("$.unreadCount", is(0)));
         mockMvc.perform(post("/api/v1/me/plans/full-body-beginner/start").header("Authorization", authorization))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.progress.status", is("ACTIVE"))).andExpect(jsonPath("$.progress.completedSessions", is(0)));
         mockMvc.perform(post("/api/v1/me/workouts").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
