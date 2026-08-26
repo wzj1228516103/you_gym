@@ -10,6 +10,8 @@ import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
 import { ExerciseContent, fetchExercise, fetchPublishedExerciseContent } from '../../services/api';
 import { translateExerciseName } from '../../data/exerciseNameZh';
+import { loadFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
+import { useAuthState } from '../../state/AuthState';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseDetail'>;
@@ -20,6 +22,8 @@ export function ExerciseDetailScreen({ navigation, route }: Props) {
 
 export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exerciseId: string; nodeId?: string; onBack: () => void }) {
   const { addExercise, todayExerciseIds, exercises } = useAppState();
+  const { user, guest } = useAuthState();
+  const favoriteScope = user?.id ?? (guest ? 'guest' : 'guest');
   const exercise = exercises.find((item) => item.id === exerciseId) ?? exercises[0];
   const [saved, setSaved] = useState(false);
   const [content, setContent] = useState<ExerciseContent | null>(null);
@@ -52,9 +56,22 @@ export function ExerciseDetailContent({ exerciseId, nodeId, onBack }: { exercise
     return () => { active = false; };
   }, [displayName, exercise.id, exercise.sourceId, nodeId]);
 
+  useEffect(() => {
+    let active = true;
+    void loadFavoriteExerciseIds(favoriteScope).then((ids) => { if (active) setSaved(ids.includes(exercise.id)); });
+    return () => { active = false; };
+  }, [exercise.id, favoriteScope]);
+
+  const toggleSaved = () => {
+    const next = !saved;
+    setSaved(next);
+    void toggleFavoriteExercise(favoriteScope, exercise.id).catch(() => setSaved(!next));
+    trackEvent(next ? 'exercise_favorited' : 'exercise_unfavorited', { exerciseId: exercise.id }, { screenId: 'exercise_detail' });
+  };
+
   return (
     <AppScreen>
-      <ScreenHeader title="动作详情" onBack={onBack} actions={<IconButton icon={Bookmark} label="收藏动作" active={saved} size={42} onPress={() => setSaved((value) => !value)} />} />
+      <ScreenHeader title="动作详情" onBack={onBack} actions={<IconButton icon={Bookmark} label={saved ? '取消收藏动作' : '收藏动作'} active={saved} size={42} onPress={toggleSaved} />} />
 
       <View style={styles.titleRow}>
         <View style={styles.titleCopy}><Text style={styles.title}>{displayName}</Text><Text style={styles.english}>{exercise.nameEn}</Text></View>

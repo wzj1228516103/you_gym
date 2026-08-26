@@ -19,6 +19,8 @@ export type AnalyticsEventName =
   | 'muscle_selected'
   | 'exercise_filter_opened'
   | 'exercise_detail_viewed'
+  | 'exercise_favorited'
+  | 'exercise_unfavorited'
   | 'workout_started'
   | 'workout_completed'
   | 'nutrition_screen_viewed'

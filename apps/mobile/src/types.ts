@@ -73,6 +73,8 @@ export type NutritionStackParamList = {
 
 export type ProfileStackParamList = {
   ProfileHome: undefined;
+  Favorites: undefined;
+  FavoriteExerciseDetail: { exerciseId: string };
   BodyData: undefined;
   Notifications: undefined;
   ReminderSettings: undefined;

@@ -27,6 +27,7 @@ import { FoodSearchScreen } from './src/screens/nutrition/FoodSearchScreen';
 import { NutritionHomeScreen } from './src/screens/nutrition/NutritionHomeScreen';
 import { AccountSecurityScreen } from './src/screens/profile/AccountSecurityScreen';
 import { BodyDataScreen } from './src/screens/profile/BodyDataScreen';
+import { FavoritesScreen, FavoriteExerciseDetailScreen } from './src/screens/profile/FavoritesScreen';
 import { HelpScreen } from './src/screens/profile/HelpScreen';
 import { NotificationsScreen } from './src/screens/profile/NotificationsScreen';
 import { ProfileHomeScreen } from './src/screens/profile/ProfileHomeScreen';
@@ -66,7 +67,7 @@ function NutritionNavigator() {
 }
 
 function ProfileNavigator() {
-  return <ProfileStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><ProfileStack.Screen name="ProfileHome" component={ProfileHomeScreen} /><ProfileStack.Screen name="BodyData" component={BodyDataScreen} /><ProfileStack.Screen name="Notifications" component={NotificationsScreen} /><ProfileStack.Screen name="ReminderSettings" component={ReminderSettingsScreen} /><ProfileStack.Screen name="Storage" component={StorageScreen} /><ProfileStack.Screen name="Help" component={HelpScreen} /><ProfileStack.Screen name="AccountSecurity" component={AccountSecurityScreen} /></ProfileStack.Navigator>;
+  return <ProfileStack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}><ProfileStack.Screen name="ProfileHome" component={ProfileHomeScreen} /><ProfileStack.Screen name="Favorites" component={FavoritesScreen} /><ProfileStack.Screen name="FavoriteExerciseDetail" component={FavoriteExerciseDetailScreen} /><ProfileStack.Screen name="BodyData" component={BodyDataScreen} /><ProfileStack.Screen name="Notifications" component={NotificationsScreen} /><ProfileStack.Screen name="ReminderSettings" component={ReminderSettingsScreen} /><ProfileStack.Screen name="Storage" component={StorageScreen} /><ProfileStack.Screen name="Help" component={HelpScreen} /><ProfileStack.Screen name="AccountSecurity" component={AccountSecurityScreen} /></ProfileStack.Navigator>;
 }
 
 function CommunityNavigator() {

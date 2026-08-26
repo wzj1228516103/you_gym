@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { Bookmark, ChevronRight, SearchX, SlidersHorizontal } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, Chip, IconButton, ScreenHeader, Tag } from '../../components/ui';
@@ -7,12 +9,16 @@ import { ExerciseMediaPreview, inferExerciseMediaKind } from '../../components/E
 import { useAppState } from '../../state/AppState';
 import { colors, radius, spacing, typography } from '../../theme';
 import { trackEvent } from '../../services/analytics';
+import { loadFavoriteExerciseIds, toggleFavoriteExercise } from '../../services/favorites';
+import { useAuthState } from '../../state/AuthState';
 import type { AnatomyStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<AnatomyStackParamList, 'ExerciseFilter'>;
 
 export function ExerciseFilterScreen({ navigation, route }: Props) {
   const { anatomyNodes, exercises } = useAppState();
+  const { user, guest } = useAuthState();
+  const favoriteScope = user?.id ?? (guest ? 'guest' : 'guest');
   const node = anatomyNodes.find((item) => item.id === route.params.nodeId) ?? anatomyNodes[0];
   useEffect(() => {
     trackEvent('screen_viewed', { nodeId: node.id, muscle: node.muscle }, { screenId: 'exercise_filter' });
@@ -23,6 +29,11 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
   const [equipment, setEquipment] = useState('全部');
   const [level, setLevel] = useState('全部');
   const [bookmarked, setBookmarked] = useState<string[]>([]);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void loadFavoriteExerciseIds(favoriteScope).then((ids) => { if (active) setBookmarked(ids); });
+    return () => { active = false; };
+  }, [favoriteScope]));
 
   const results = useMemo(() => exercises.filter((exercise) => (
     node.exerciseIds.includes(exercise.id)
@@ -60,7 +71,15 @@ export function ExerciseFilterScreen({ navigation, route }: Props) {
             <Text style={styles.exerciseMeta}>{exercise.equipment} · {exercise.target}</Text>
             <View style={styles.ratingRow}>{exercise.rating > 0 ? <Text style={styles.rating}>{exercise.rating} 分</Text> : null}<Tag>{exercise.level}</Tag></View>
           </View>
-          <Pressable hitSlop={10} onPress={(event) => { event.stopPropagation(); setBookmarked((current) => current.includes(exercise.id) ? current.filter((id) => id !== exercise.id) : [...current, exercise.id]); }}>
+          <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={bookmarked.includes(exercise.id) ? `取消收藏${exercise.name}` : `收藏${exercise.name}`} onPress={(event) => {
+            event.stopPropagation();
+            const saved = !bookmarked.includes(exercise.id);
+            setBookmarked((current) => saved ? [exercise.id, ...current] : current.filter((id) => id !== exercise.id));
+            void toggleFavoriteExercise(favoriteScope, exercise.id).catch(() => {
+              setBookmarked((current) => saved ? current.filter((id) => id !== exercise.id) : [exercise.id, ...current]);
+            });
+            trackEvent(saved ? 'exercise_favorited' : 'exercise_unfavorited', { exerciseId: exercise.id }, { screenId: 'exercise_filter' });
+          }}>
             <Bookmark size={20} color={bookmarked.includes(exercise.id) ? colors.primary : colors.textSecondary} fill={bookmarked.includes(exercise.id) ? colors.primary : 'transparent'} />
           </Pressable>
           <ChevronRight size={18} color={colors.textTertiary} />

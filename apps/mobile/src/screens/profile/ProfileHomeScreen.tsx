@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Bell, BellRing, ChevronRight, Database, Download, Goal, ShieldCheck, UserRound } from 'lucide-react-native';
+import { Bell, BellRing, Bookmark, ChevronRight, Database, Download, Goal, ShieldCheck, UserRound } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen, Card, IconButton, Metric, ScreenHeader, SectionHeader, Tag } from '../../components/ui';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -23,6 +23,7 @@ export function ProfileHomeScreen({ navigation }: Props) {
       <SectionHeader title="数据与设置" />
       <View style={styles.menu}>
         <MenuRow icon={Database} label="身体数据" value="查看趋势" onPress={() => navigation.navigate('BodyData')} />
+        <MenuRow icon={Bookmark} label="我的收藏" value="动作收藏" onPress={() => navigation.navigate('Favorites')} />
         <MenuRow icon={Goal} label="目标与经验" value={[user?.goal, user?.experienceLevel].filter(Boolean).join(' · ') || '未设置'} />
         <MenuRow icon={Bell} label="提醒设置" value="尚未同步" onPress={() => navigation.navigate('ReminderSettings')} />
         <MenuRow icon={Download} label="下载与缓存" value="查看本机" onPress={() => navigation.navigate('Storage')} />
