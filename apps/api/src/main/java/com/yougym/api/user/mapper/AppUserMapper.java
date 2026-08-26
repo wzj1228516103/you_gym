@@ -66,6 +66,32 @@ public class AppUserMapper {
         value.put("measuredAt", rs.getTimestamp("measured_at"));
         return value;
     }
+    public boolean planExists(String planId) { Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM training_plan WHERE id=? AND status='ACTIVE'", Integer.class, planId); return count != null && count > 0; }
+    public Map<String,Object> startPlan(String userId, String planId, Instant now) {
+        int updated = jdbc.update("UPDATE user_training_plan SET status='ACTIVE',updated_at=? WHERE user_id=? AND plan_id=?", ts(now), userId, planId);
+        if (updated == 0) jdbc.update("INSERT INTO user_training_plan (user_id,plan_id,status,completed_sessions,started_at,created_at,updated_at) VALUES (?,?, 'ACTIVE',0,?,?,?)", userId, planId, ts(now), ts(now), ts(now));
+        return planProgress(userId, planId);
+    }
+    public Map<String,Object> planProgress(String userId, String planId) {
+        List<Map<String,Object>> rows = jdbc.query("SELECT plan_id,status,completed_sessions,started_at,last_completed_at,updated_at FROM user_training_plan WHERE user_id=? AND plan_id=?", (rs, rowNum) -> {
+            Map<String,Object> value = new LinkedHashMap<>();
+            value.put("planId", rs.getString("plan_id"));
+            value.put("status", rs.getString("status"));
+            value.put("completedSessions", rs.getInt("completed_sessions"));
+            value.put("startedAt", rs.getTimestamp("started_at"));
+            value.put("lastCompletedAt", rs.getTimestamp("last_completed_at"));
+            value.put("updatedAt", rs.getTimestamp("updated_at"));
+            return value;
+        }, userId, planId);
+        if (!rows.isEmpty()) return rows.get(0);
+        Map<String,Object> empty = new LinkedHashMap<>();
+        empty.put("planId", planId); empty.put("status", "NOT_STARTED"); empty.put("completedSessions", 0);
+        empty.put("startedAt", null); empty.put("lastCompletedAt", null); empty.put("updatedAt", null);
+        return empty;
+    }
+    public void completePlanSession(String userId, String planId, Instant now) {
+        jdbc.update("UPDATE user_training_plan SET completed_sessions=completed_sessions+1,last_completed_at=?,updated_at=? WHERE user_id=? AND plan_id=?", ts(now), ts(now), userId, planId);
+    }
     public List<Map<String,Object>> adminUsers(String search, int limit, int offset) { String term = search == null ? null : search.trim().toLowerCase(); if (term == null || term.isBlank()) return jdbc.queryForList("SELECT id,phone,nickname,gender,goal,experience_level AS experienceLevel,status,created_at AS createdAt,last_login_at AS lastLoginAt FROM app_user ORDER BY created_at DESC LIMIT ? OFFSET ?", limit, offset); return jdbc.queryForList("SELECT id,phone,nickname,gender,goal,experience_level AS experienceLevel,status,created_at AS createdAt,last_login_at AS lastLoginAt FROM app_user WHERE LOWER(phone) LIKE ? OR LOWER(nickname) LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?", "%"+term+"%", "%"+term+"%", limit, offset); }
     public long countAdminUsers(String search) { String term = search == null ? null : search.trim().toLowerCase(); Long count = term == null || term.isBlank() ? jdbc.queryForObject("SELECT COUNT(*) FROM app_user", Long.class) : jdbc.queryForObject("SELECT COUNT(*) FROM app_user WHERE LOWER(phone) LIKE ? OR LOWER(nickname) LIKE ?", Long.class, "%"+term+"%", "%"+term+"%"); return count == null ? 0 : count; }
     public List<Map<String,Object>> adminWorkouts(String userId, int limit, int offset) { return userId == null || userId.isBlank() ? jdbc.queryForList("SELECT id,user_id AS userId,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record ORDER BY completed_at DESC LIMIT ? OFFSET ?", limit, offset) : jdbc.queryForList("SELECT id,user_id AS userId,title,duration_seconds AS durationSeconds,total_sets AS totalSets,total_volume AS totalVolume,calories,completed_at AS completedAt FROM workout_record WHERE user_id=? ORDER BY completed_at DESC LIMIT ? OFFSET ?", userId, limit, offset); }

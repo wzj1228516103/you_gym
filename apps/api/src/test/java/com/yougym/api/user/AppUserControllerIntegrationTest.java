@@ -48,12 +48,19 @@ class AppUserControllerIntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.saved", is(true))).andExpect(jsonPath("$.measurement.weightKg", is(72.1)));
         mockMvc.perform(get("/api/v1/me/measurements").header("Authorization", authorization).param("limit", "10"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1))).andExpect(jsonPath("$.items[0].waistCm", is(82.0)));
+        mockMvc.perform(post("/api/v1/me/plans/full-body-beginner/start").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.progress.status", is("ACTIVE"))).andExpect(jsonPath("$.progress.completedSessions", is(0)));
+        mockMvc.perform(post("/api/v1/me/workouts").header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"计划训练\",\"durationSeconds\":600,\"totalSets\":4,\"totalVolume\":1200,\"calories\":100,\"metadata\":{\"planId\":\"full-body-beginner\"}}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/me/plans/full-body-beginner/progress").header("Authorization", authorization))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.progress.completedSessions", is(1)));
         mockMvc.perform(get("/api/admin/v1/app-users").header("X-Admin-Test-Token", "local-admin"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
                 .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(50)));
         mockMvc.perform(get("/api/admin/v1/app-users/workouts").header("X-Admin-Test-Token", "local-admin").param("pageSize", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
-                .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(1)));
+                .andExpect(jsonPath("$.total", is(2))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(1)));
         mockMvc.perform(get("/api/admin/v1/app-users/nutrition").header("X-Admin-Test-Token", "local-admin").param("pageSize", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
                 .andExpect(jsonPath("$.total", is(1))).andExpect(jsonPath("$.page", is(1))).andExpect(jsonPath("$.pageSize", is(1)));

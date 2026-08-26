@@ -91,6 +91,8 @@ POST  /api/v1/me/nutrition
 GET   /api/v1/me/nutrition
 POST  /api/v1/me/measurements
 GET   /api/v1/me/measurements
+POST  /api/v1/me/plans/{planId}/start
+GET   /api/v1/me/plans/{planId}/progress
 GET   /api/v1/anatomy/tree?gender=all&view=all
 GET   /api/v1/content?contentType=EXERCISE&search=动作名称
 GET   /api/v1/exercises?search=深蹲&equipment=杠铃

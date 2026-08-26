@@ -72,6 +72,10 @@ export type PlanSummary = {
 export type PlanDetail = PlanSummary & {
   exercises: { id: string; nameZh: string; nameEn: string; equipment: string; location: string; sets: number; reps: string; restSeconds: number; sortOrder: number }[];
 };
+export type PlanProgress = {
+  planId: string; status: 'NOT_STARTED' | 'ACTIVE' | 'PAUSED' | 'COMPLETED'; completedSessions: number;
+  startedAt: string | null; lastCompletedAt: string | null; updatedAt: string | null;
+};
 export type FoodItem = { id: string; name: string; serving: string; calories: number; protein: number; carbs: number; fat: number; source: string; mediaUrl?: string | null; mediaAssets?: { url: string; objectName?: string; fileName?: string; fileType?: string }[] };
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -126,5 +130,7 @@ export function fetchExerciseCatalog(search?: string, equipment?: string) { cons
 export function fetchExercise(id: string) { return request<ExerciseCatalogItem>(`/api/v1/exercises/${encodeURIComponent(id)}`); }
 export function fetchPlans(category?: string, search?: string) { const query = new URLSearchParams({ limit: '100' }); if (category && category !== '全部') query.set('category', category); if (search) query.set('search', search); return request<{ items: PlanSummary[] }>(`/api/v1/plans?${query.toString()}`); }
 export function fetchPlan(id: string) { return request<PlanDetail>(`/api/v1/plans/${encodeURIComponent(id)}`); }
+export function startPlan(token: string, planId: string) { return request<{ progress: PlanProgress }>(`/api/v1/me/plans/${encodeURIComponent(planId)}/start`, { method: 'POST' }, token); }
+export function fetchPlanProgress(token: string, planId: string) { return request<{ progress: PlanProgress }>(`/api/v1/me/plans/${encodeURIComponent(planId)}/progress`, {}, token); }
 export function fetchFoods(search?: string, signal?: AbortSignal) { const query = new URLSearchParams({ limit: '100' }); if (search) query.set('search', search); return request<{ items: FoodItem[] }>(`/api/v1/foods?${query.toString()}`, { signal }); }
 export function fetchFood(id: string) { return request<FoodItem>(`/api/v1/foods/${encodeURIComponent(id)}`); }

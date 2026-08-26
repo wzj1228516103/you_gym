@@ -60,9 +60,9 @@ export type PlanStackParamList = {
   QuickWorkout: undefined;
   ExerciseDetail: { exerciseId: string };
   History: undefined;
-  Workout: undefined;
+  Workout: { planId?: string } | undefined;
   Rest: { seconds: number; setNumber?: number; weight?: number; reps?: number; exerciseName?: string };
-  WorkoutSummary: { title?: string; durationSeconds?: number; totalSets?: number; plannedSets?: number; totalVolume?: number; calories?: number; muscles?: string[] } | undefined;
+  WorkoutSummary: { planId?: string; title?: string; durationSeconds?: number; totalSets?: number; plannedSets?: number; totalVolume?: number; calories?: number; muscles?: string[] } | undefined;
 };
 
 export type NutritionStackParamList = {

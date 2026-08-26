@@ -88,7 +88,13 @@ public class AppUserServiceImpl implements AppUserService {
         mapper.updateProfile(u.id(),merged,Instant.now());
         return AppUserVO.from(mapper.findById(u.id()));
     }
-    @Override public void recordWorkout(String token,CreateWorkoutRecordRequest request){mapper.saveWorkout(requireUser(token).id(),request,Instant.now());}
+    @Override public void recordWorkout(String token,CreateWorkoutRecordRequest request){
+        AppUser user = requireUser(token);
+        Instant now = Instant.now();
+        mapper.saveWorkout(user.id(), request, now);
+        Object planId = request.metadata() == null ? null : request.metadata().get("planId");
+        if (planId instanceof String value && !value.isBlank()) mapper.completePlanSession(user.id(), value, now);
+    }
     @Override public void recordNutrition(String token,CreateNutritionRecordRequest request){mapper.saveNutrition(requireUser(token).id(),request,Instant.now());}
     @Override public List<Map<String,Object>> workouts(String token,int limit){return mapper.workouts(requireUser(token).id(),clamp(limit));}
     @Override public List<Map<String,Object>> nutrition(String token,int limit){return mapper.nutrition(requireUser(token).id(),clamp(limit));}
@@ -99,6 +105,16 @@ public class AppUserServiceImpl implements AppUserService {
         return mapper.saveBodyMeasurement(requireUser(token).id(), request, Instant.now());
     }
     @Override public List<Map<String,Object>> bodyMeasurements(String token,int limit){return mapper.bodyMeasurements(requireUser(token).id(),clamp(limit));}
+    @Override public Map<String,Object> startPlan(String token, String planId) {
+        AppUser user = requireUser(token);
+        if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");
+        return mapper.startPlan(user.id(), planId, Instant.now());
+    }
+    @Override public Map<String,Object> planProgress(String token, String planId) {
+        AppUser user = requireUser(token);
+        if (planId == null || planId.isBlank() || !mapper.planExists(planId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "plan not found");
+        return mapper.planProgress(user.id(), planId);
+    }
     private AppUser requireUser(String token){if(token==null||token.isBlank())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"missing app bearer token");AppUser u=mapper.findBySessionHash(hash(token));if(u==null)throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"invalid or expired app session");mapper.touchSession(hash(token),Instant.now());return u;}
     private static int clamp(int limit){return Math.max(1,Math.min(limit,200));}
     private static String purpose(String value){String p=value.trim().toUpperCase();if(!p.equals("LOGIN")&&!p.equals("REGISTER"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"unsupported verification purpose");return p;}

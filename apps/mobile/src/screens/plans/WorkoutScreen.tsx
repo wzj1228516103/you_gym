@@ -10,7 +10,7 @@ import type { PlanStackParamList } from '../../types';
 
 type Props = NativeStackScreenProps<PlanStackParamList, 'Workout'>;
 
-export function WorkoutScreen({ navigation }: Props) {
+export function WorkoutScreen({ navigation, route }: Props) {
   const { todayExercises } = useAppState();
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [currentSet, setCurrentSet] = useState(1);
@@ -26,6 +26,7 @@ export function WorkoutScreen({ navigation }: Props) {
   const openSummary = (totalSets: number, totalVolume: number) => {
     const durationSeconds = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
     navigation.replace('WorkoutSummary', {
+      planId: route.params?.planId,
       title: todayExercises.length === 1 ? exercise.name : '组合训练',
       durationSeconds,
       totalSets,

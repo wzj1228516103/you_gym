@@ -26,8 +26,8 @@ export function WorkoutSummaryScreen({ navigation, route }: Props) {
     if (saved.current) return;
     saved.current = true;
     trackEvent('workout_completed', { durationSeconds, totalSets, totalVolume }, { screenId: 'workout_summary' });
-    if (token) void saveWorkout(token, { title: summary.title ?? '今日训练', durationSeconds, totalSets, totalVolume, calories, metadata: { muscles, plannedSets, completionPercent } }).catch((cause) => Alert.alert('训练记录保存失败', cause instanceof Error ? cause.message : '请稍后重试'));
-  }, [calories, completionPercent, durationSeconds, muscles, plannedSets, summary.title, token, totalSets, totalVolume]);
+    if (token) void saveWorkout(token, { title: summary.title ?? '今日训练', durationSeconds, totalSets, totalVolume, calories, metadata: { planId: summary.planId, muscles, plannedSets, completionPercent } }).catch((cause) => Alert.alert('训练记录保存失败', cause instanceof Error ? cause.message : '请稍后重试'));
+  }, [calories, completionPercent, durationSeconds, muscles, plannedSets, summary.planId, summary.title, token, totalSets, totalVolume]);
   return (
     <AppScreen contentStyle={styles.content}>
       <View style={styles.trophy}><Trophy size={52} color={colors.textInverse} strokeWidth={2.2} /></View>
