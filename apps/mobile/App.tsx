@@ -141,14 +141,14 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AppStateProvider>
       <AuthStateProvider>
+      <AppStateProvider>
         <NavigationContainer theme={navigationTheme}>
           <StatusBar style="light" />
           <RootNavigator />
         </NavigationContainer>
-      </AuthStateProvider>
       </AppStateProvider>
+      </AuthStateProvider>
     </SafeAreaProvider>
   );
 }

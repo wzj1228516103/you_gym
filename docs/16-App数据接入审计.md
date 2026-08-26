@@ -28,7 +28,7 @@
 | 模块 | 当前状态 | 后续建议 |
 | --- | --- | --- |
 | 收藏动作、收藏计划 | 动作收藏已按游客/用户 scope 持久化到 App 本地，收藏计划仍未接入 | 新建 `user_favorite`，按 `user_id + target_type + target_id` 唯一约束，并把本地收藏迁移为跨设备同步 |
-| 当前计划与计划进度 | 仅生成当前训练队列，没有长期计划关系 | 新建 `user_training_plan`、`user_plan_progress` |
+| 当前计划与计划进度 | 当前训练队列已按游客/用户 scope 持久化到 App 本地，但还没有长期计划关系 | 新建 `user_training_plan`、`user_plan_progress`，并把训练队列与计划进度关联 |
 | 身体数据历史 | 当前值来自个人资料，趋势为空态 | 新建 `body_measurement`，记录体重、体脂、围度和测量时间 |
 | 营养目标 | 当日摄入来自数据库，目标显示未设置 | 新建 `user_nutrition_goal` 或扩展个人资料，记录热量与三大营养素目标 |
 | 通知中心 | 已移除静态列表，当前显示空态 | 新建 `user_notification`、已读时间和通知类型；接入后台发送任务 |

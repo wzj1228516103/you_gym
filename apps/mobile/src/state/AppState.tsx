@@ -4,6 +4,8 @@ import { anatomyNodes as localAnatomyNodes, exercises } from '../data/mockData';
 import { mergeAnatomyNodes } from '../data/anatomyMerge';
 import { translateExerciseName } from '../data/exerciseNameZh';
 import { fetchAnatomyTree, fetchExerciseCatalog } from '../services/api';
+import { loadTodayExerciseIds, saveTodayExerciseIds } from '../services/todayQueue';
+import { useAuthState } from './AuthState';
 import type { AnatomyNode, AnatomyTreeNode, Exercise } from '../types';
 
 const ANATOMY_CACHE_KEY = 'you-gym:anatomy-tree-cache:v1';
@@ -30,15 +32,33 @@ type AppStateValue = {
 const AppStateContext = createContext<AppStateValue | null>(null);
 
 export function AppStateProvider({ children }: PropsWithChildren) {
+  const { user, guest } = useAuthState();
+  const queueScope = user?.id ?? (guest ? 'guest' : 'guest');
   const [anatomyNodes, setAnatomyNodes] = useState(localAnatomyNodes);
   const [anatomySynced, setAnatomySynced] = useState(false);
   const [exerciseCatalogSynced, setExerciseCatalogSynced] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState(localAnatomyNodes[0].id);
   const [todayExerciseIds, setTodayExerciseIds] = useState<string[]>([]);
+  const [queueLoaded, setQueueLoaded] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<Exercise[]>([]);
   const selectedNode = anatomyNodes.find((node) => node.id === selectedNodeId) ?? anatomyNodes[0];
   const activeExercises = exerciseCatalogSynced ? catalogExercises : exercises;
   const todayExercises = activeExercises.filter((exercise) => todayExerciseIds.includes(exercise.id));
+
+  useEffect(() => {
+    let active = true;
+    setQueueLoaded(false);
+    void loadTodayExerciseIds(queueScope).then((ids) => {
+      if (!active) return;
+      setTodayExerciseIds(ids);
+      setQueueLoaded(true);
+    });
+    return () => { active = false; };
+  }, [queueScope]);
+
+  useEffect(() => {
+    if (queueLoaded) void saveTodayExerciseIds(queueScope, todayExerciseIds);
+  }, [queueLoaded, queueScope, todayExerciseIds]);
 
   useEffect(() => {
     let active = true;
